@@ -14,11 +14,13 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+
 # Task Manager
 
 A task management application built with React and Vite.
 
-I am building this project incrementally as part of my frontend development portfolio. My goal is not only to implement the application features, but also to understand and apply professional development practices such as component architecture, automated testing, accessibility, CI/CD, Git workflows, and clear technical documentation.
+I am building this project incrementally as part of my frontend development portfolio. My goal is not only to implement application features, but also to understand and apply professional development practices such as component architecture, automated testing, accessibility, CI/CD, Git workflows, and clear technical documentation.
 
 Rather than building the entire application at once, I am developing it feature by feature. This allows me to understand each decision, validate each change, and keep the project maintainable as it grows.
 
@@ -38,13 +40,17 @@ The project is currently under active development.
 - Dedicated `TaskForm` component
 - Controlled task title input using React state
 - Accessible form elements
+- Task submission through a callback prop
+- Whitespace normalization with `trim()`
+- Validation against empty and whitespace-only task titles
+- Input reset after successful submission
+- Task collection state owned by `App`
+- Singular and plural task counter
 - Automated component tests
+- Integration-style test for form-to-parent communication
 
 ### Planned
 
-- Task submission
-- Form validation
-- Task creation
 - Task list
 - Task completion
 - Task editing
@@ -102,21 +108,81 @@ I prefer introducing abstractions only when there is a clear responsibility to s
 
 ### Controlled Form State
 
-I chose to manage the task title as a controlled React input using `useState`.
+I chose to manage the unfinished task title as a controlled React input using `useState`.
 
 The current value of the input is stored in React state and updated whenever the user types.
 
-This gives me explicit control over the field value and prepares the form for upcoming features such as validation, submission handling, and clearing the input after a task is created.
+This gives me explicit control over the field value and makes validation, submission handling, and resetting the input predictable.
 
 I considered leaving the input uncontrolled and reading its value only when the form is submitted.
 
-That approach would require less code initially, but I chose controlled state because the form behavior will soon depend on the current value.
+That approach would require less code initially, but I chose controlled state because the form behavior depends on the current value.
 
 I also decided to keep the unfinished task title state inside `TaskForm` instead of moving it to `App`.
 
-At this stage, no other component needs access to that temporary value, so lifting the state would introduce unnecessary coupling.
+No other component needs access to what the user is typing before submission, so lifting that temporary state would introduce unnecessary coupling.
 
-I will move state higher in the component tree only when another component genuinely needs access to it.
+### Parent-owned Task Collection
+
+I chose to keep the submitted task collection in `App` rather than inside `TaskForm`.
+
+`TaskForm` is responsible for collecting and validating user input, while `App` owns data that will eventually be shared with other components such as the task list and task filters.
+
+I chose this separation because the task collection represents application-level state, while the unfinished input value is local form state.
+
+This keeps each piece of state as close as possible to the components that actually need it.
+
+### Callback Prop for Child-to-Parent Communication
+
+I chose to pass an `onAddTask` callback from `App` to `TaskForm`.
+
+When a valid title is submitted, `TaskForm` calls the callback with the normalized title instead of modifying the parent state directly.
+
+This keeps the component boundary explicit:
+
+```text
+App
+  ↓ onAddTask
+TaskForm
+  ↑ submitted title
+App
+```
+
+I chose this approach because React data normally flows down through props, while child components communicate events upward through callback functions.
+
+I deliberately avoided putting the task collection inside the form because that would mix form responsibilities with application data ownership.
+
+### Input Normalization and Validation
+
+I chose to normalize submitted titles with `trim()` before sending them to the parent.
+
+This prevents accidental leading and trailing whitespace from becoming part of the stored task title.
+
+I also reject empty and whitespace-only values before calling `onAddTask`.
+
+I chose to perform this validation inside `TaskForm` because invalid input should be rejected at the form boundary before it reaches application state.
+
+I deliberately avoided relying only on an HTML `required` attribute because I also want the application logic itself to protect the data from whitespace-only values.
+
+### Reset After Successful Submission
+
+I clear the controlled input only after a valid task has been submitted.
+
+This prepares the form for the next task while preserving the user's text when submission is rejected.
+
+I chose this behavior because clearing invalid input would remove information the user may want to correct.
+
+### Functional State Updates
+
+When adding a submitted task to the collection, I use a functional state update:
+
+```js
+setTasks((currentTasks) => [...currentTasks, taskTitle])
+```
+
+I chose this approach because the next task collection depends on the previous state.
+
+Using the previous state provided by React avoids relying on a potentially stale state snapshot and makes the relationship between the old and new state explicit.
 
 ### Accessible Form Structure
 
@@ -154,7 +220,7 @@ screen.getByRole('textbox', {
 
 I chose this approach because it reflects how users and assistive technologies identify interface elements.
 
-I deliberately avoided relying on CSS selectors or implementation-specific attributes when an accessible query is available.
+I deliberately avoid relying on CSS selectors or implementation-specific attributes when an accessible query is available.
 
 This has an additional advantage: accessibility problems can also cause tests to fail, which encourages me to maintain meaningful semantic markup.
 
@@ -175,6 +241,24 @@ expect(taskInput).toHaveValue('Buy groceries')
 I chose to test the observable result instead of directly testing the internal `useState` value.
 
 This means the test can remain valid even if I later refactor the internal implementation while preserving the same user behavior.
+
+### Mock Functions for Component Contracts
+
+I use `vi.fn()` when testing whether `TaskForm` communicates correctly with its parent.
+
+This allows me to verify that the component calls `onAddTask` with the expected normalized value without needing to render the complete application.
+
+I chose this approach because it isolates the public contract of `TaskForm`: valid input should produce one callback call with the correct task title.
+
+### Integration-style Component Testing
+
+In addition to testing `TaskForm` in isolation, I test the complete interaction through `App`.
+
+The integration-style test simulates a user entering a task, submitting the form, and observing the task counter update.
+
+I chose this additional test because unit-level component tests can prove that the callback is called, but they do not prove that the parent component handles that callback correctly.
+
+Testing both levels gives me confidence in the component contract and in the way the components work together.
 
 ### Test Isolation
 
@@ -267,25 +351,25 @@ Squash merging keeps the history of `main` focused on completed changes rather t
 
 ## Testing
 
-The complete test suite can be executed with:
+Run the complete test suite with:
 
 ```bash
 npm test
 ```
 
-Linting can be executed with:
+Run linting with:
 
 ```bash
 npm run lint
 ```
 
-The production build can be validated with:
+Validate the production build with:
 
 ```bash
 npm run build
 ```
 
-During development, the application can be started with:
+Start the development server with:
 
 ```bash
 npm run dev
@@ -298,11 +382,19 @@ Through this project, I am actively practicing:
 - React component design
 - React state management
 - Controlled form inputs
-- Component responsibilities
+- State ownership
+- Props and callback props
+- Child-to-parent communication
+- Functional state updates
+- Form submission
+- Input normalization
+- Input validation
 - Semantic HTML
 - Accessibility
 - Component testing
+- Mock functions
 - User interaction testing
+- Integration-style component testing
 - Test isolation
 - Git branching
 - Conventional Commits
