@@ -55,15 +55,18 @@ The project is currently under active development.
 - Task completion state
 - Controlled completion checkbox
 - Immutable task updates
+- Task deletion
+- Immutable deletion with `filter()`
+- Delete action propagated through callback props
 - Singular and plural task counter
 - Automated component tests
 - Integration-style tests for component communication
-- End-to-end component flow for task completion
+- Integration-style task completion test
+- Integration-style task deletion test
 
 ### Planned
 
 - Task editing
-- Task deletion
 - Task filtering
 - Local storage persistence
 - Responsive interface
@@ -107,11 +110,11 @@ This also gives me a clearer Git history and allows each pull request to represe
 
 I chose to separate the interface into focused components instead of keeping all application markup and behavior inside `App.jsx`.
 
-The task form lives in `TaskForm`, the task collection is displayed by `TaskList`, and each individual interactive task is rendered by `TaskItem`.
+The task form lives in `TaskForm`, the task collection is displayed by `TaskList`, and each interactive task is rendered by `TaskItem`.
 
 This keeps `App` responsible for application-level state and component composition instead of detailed UI responsibilities.
 
-I deliberately avoid creating components before they have a clear responsibility. I introduced `TaskItem` only when individual tasks gained their own behavior through the completion checkbox.
+I deliberately avoid creating components before they have a clear responsibility. I introduced `TaskItem` only when individual tasks gained their own behavior.
 
 ### Controlled Form State
 
@@ -143,15 +146,15 @@ I chose this separation because the task collection represents application-level
 
 I use callback props to communicate user actions from child components back to `App`.
 
-`TaskForm` receives `onAddTask`, while `TaskItem` receives `onToggleTask`.
+`TaskForm` receives `onAddTask`, while `TaskItem` receives `onToggleTask` and `onDeleteTask`.
 
-For task completion, the flow is:
+For deletion, the flow is:
 
 ```text
 App
-  ↓ onToggleTask
+  ↓ onDeleteTask
 TaskList
-  ↓ onToggleTask
+  ↓ onDeleteTask
 TaskItem
   ↑ task ID
 App
@@ -197,9 +200,7 @@ The current structure is:
 }
 ```
 
-I chose this approach because each task now has both identity and behavior-related state.
-
-Adding `completed` to the task object keeps all persistent task information together and prepares the model for later features such as filtering and persistence.
+I chose this approach because each task needs its own identity and behavior-related state.
 
 I deliberately avoid adding properties before they are needed. I prefer evolving the data model alongside real application requirements.
 
@@ -209,7 +210,7 @@ I assign each task a stable ID when it is created using `crypto.randomUUID()`.
 
 I chose a stable ID because React list items need an identity that remains associated with the same task even when the collection changes.
 
-I also use the ID when requesting task updates.
+The same ID is also used for completion and deletion actions.
 
 I deliberately avoided using the array index as the React `key` because array positions can change when tasks are deleted, filtered, or reordered.
 
@@ -235,27 +236,47 @@ setTasks((currentTasks) =>
 )
 ```
 
-I chose this approach because the next task collection depends on the previous collection.
+For deleting tasks:
+
+```js
+setTasks((currentTasks) =>
+  currentTasks.filter((task) => task.id !== taskId),
+)
+```
+
+I chose this approach because each next collection depends on the current collection.
 
 Using the previous state provided by React avoids relying on a potentially stale state snapshot.
 
 ### Immutable Task Updates
 
-I update task completion immutably instead of modifying the existing task object.
+I treat React state as immutable.
 
-I use `map()` to create a new array and object spread to create a new object only for the task that changed.
+For completion, I use `map()` and object spread to create a new task object only for the task that changed.
 
-I chose this approach because React state should be treated as immutable.
-
-Direct mutation such as:
+I deliberately avoid direct mutation such as:
 
 ```js
 task.completed = true
 ```
 
-would modify an object already stored in state and make state changes harder to reason about.
+because it modifies an object that already belongs to React state.
 
-The immutable update keeps unchanged tasks intact while producing a new collection for React.
+### Immutable Task Deletion
+
+I chose `filter()` for task deletion.
+
+The deletion rule is expressed as keeping every task whose ID does not match the selected task:
+
+```js
+currentTasks.filter((task) => task.id !== taskId)
+```
+
+I chose this approach because `filter()` returns a new array without mutating the existing state collection.
+
+I deliberately avoided methods such as `splice()` because they modify the existing array in place.
+
+Using `filter()` also makes the intention of the operation clear: the next collection is the current collection without one identified task.
 
 ### Dedicated TaskList Component
 
@@ -263,46 +284,33 @@ I render the task collection inside a dedicated `TaskList` component instead of 
 
 This gives the collection a clear rendering responsibility while leaving `App` focused on state ownership and application composition.
 
-`TaskList` also acts as the connection between application-level task data and the individual `TaskItem` components.
+`TaskList` also forwards task-level actions such as completion and deletion without owning the application state itself.
 
 ### Dedicated TaskItem Component
 
-I introduced `TaskItem` when individual tasks gained their own interactive behavior.
+I introduced `TaskItem` when individual tasks gained interactive behavior.
 
-Previously, each task only displayed text, so a separate component would have added structure without providing a clear benefit.
+The component is responsible for:
 
-Once completion behavior was added, the task item gained its own responsibilities:
+- displaying the task title
+- displaying completion state
+- exposing the completion checkbox
+- exposing the delete action
+- reporting user actions using the task ID
 
-- display the task title
-- display the completion state
-- expose a checkbox interaction
-- report toggle requests to the parent
+I chose to keep state changes outside `TaskItem` because the parent application owns the shared collection.
 
-I chose to create the component at this point because the abstraction now represents a real domain concept and interaction boundary.
+### Single Source of Truth for Task State
 
-### Single Source of Truth for Completion State
+I do not create a second copy of task completion or deletion state inside `TaskItem`.
 
-I chose not to create local `useState` inside `TaskItem` for the checkbox.
+The task collection in `App` remains the single source of truth.
 
-The checkbox receives its checked value from `task.completed`.
+For completion, `TaskItem` receives `task.completed`.
 
-This means the task collection in `App` remains the single source of truth.
+For deletion, `TaskItem` reports the selected task ID and disappears only after `App` produces a new task collection.
 
-I deliberately avoided duplicating completion state locally because two copies of the same state could become inconsistent.
-
-The flow is:
-
-```text
-App task state
-  ↓
-TaskItem checkbox
-  ↓ user interaction
-onToggleTask(task.id)
-  ↓
-App updates task state
-  ↓
-TaskItem receives updated task
-```
+I chose this approach because duplicated state can become inconsistent.
 
 ### Controlled Completion Checkbox
 
@@ -320,7 +328,19 @@ onChange={handleToggle}
 
 I chose a controlled checkbox because its visual state should always reflect the application data stored in `App`.
 
-This keeps the user interface synchronized with the actual task model.
+### Explicit Delete Button Type
+
+The delete action uses:
+
+```jsx
+<button type="button">
+  Delete
+</button>
+```
+
+I chose an explicit `type="button"` because deleting a task is an action, not a form submission.
+
+Although `TaskItem` is not currently rendered inside the task form, making the button's intent explicit avoids accidental submission behavior if the component structure changes later.
 
 ### Semantic List Markup
 
@@ -328,15 +348,15 @@ I render the task collection with `<ul>` and `<li>` elements.
 
 I chose semantic list markup because tasks represent a collection of related items.
 
-Using native list elements communicates that structure directly to browsers and assistive technologies without recreating list semantics with generic elements.
+Using native list elements communicates that structure directly to browsers and assistive technologies without recreating list semantics with generic `<div>` elements.
 
 ### Accessible Task Controls
 
-I wrap the checkbox and task title in a `<label>`.
+I wrap the completion checkbox and task title in a `<label>`.
 
-This creates an accessible relationship between the task title and its checkbox.
+This gives the checkbox an accessible name based on the visible task title.
 
-As a result, the checkbox can be identified by the visible task name, for example:
+For example:
 
 ```js
 screen.getByRole('checkbox', {
@@ -344,7 +364,9 @@ screen.getByRole('checkbox', {
 })
 ```
 
-I chose this approach because the control should be understandable and operable through its visible task label without requiring hidden testing-specific attributes.
+I also locate the delete action by its accessible button role and visible label.
+
+I chose accessible queries and semantic controls because they reflect how users interact with the interface rather than how the DOM happens to be structured internally.
 
 ### Empty State
 
@@ -352,13 +374,15 @@ When the task collection is empty, `TaskList` displays a clear message instead o
 
 I chose to provide an explicit empty state because a blank area does not tell the user whether the interface is working or what action to take next.
 
+After the final task is deleted, the application naturally returns to this empty state because it is derived from the task collection.
+
 ### Testing Strategy
 
 I use Vitest together with React Testing Library.
 
 My tests focus on observable behavior instead of internal React implementation details.
 
-For example, completion is verified through the checkbox state rather than by accessing `task.completed` inside the application.
+For example, completion is verified through the checkbox state and deletion is verified through the task disappearing from the document.
 
 I chose this approach because user-facing tests remain useful even when implementation details change.
 
@@ -369,14 +393,28 @@ I prefer queries such as `getByRole` when testing interactive elements.
 For example:
 
 ```js
-screen.getByRole('checkbox', {
-  name: /buy groceries/i,
+screen.getByRole('button', {
+  name: /delete/i,
 })
 ```
 
 I chose this approach because it reflects how users and assistive technologies identify interface elements.
 
 I deliberately avoid relying on CSS selectors or testing-specific attributes when an accessible query is available.
+
+### Querying for Absence
+
+For deletion tests, I use a `queryBy...` query when the expected result is that an element no longer exists:
+
+```js
+expect(screen.queryByText('Buy groceries')).not.toBeInTheDocument()
+```
+
+I chose `queryByText` instead of `getByText` because `queryBy` returns `null` when no matching element exists.
+
+That behavior is appropriate when absence is the expected result.
+
+Using `getByText` would throw immediately when the element is missing, which makes it unsuitable for this negative assertion.
 
 ### User Interaction Testing
 
@@ -385,7 +423,7 @@ I use `@testing-library/user-event` for interactions such as typing and clicking
 For example:
 
 ```js
-await user.click(taskCheckbox)
+await user.click(deleteButton)
 ```
 
 I chose `user-event` because it models user interaction more closely than manually dispatching individual low-level DOM events.
@@ -394,9 +432,9 @@ I chose `user-event` because it models user interaction more closely than manual
 
 I use `vi.fn()` when testing child component callback contracts.
 
-For `TaskItem`, I verify that clicking the checkbox calls `onToggleTask` with the correct task ID.
+For deletion, the `TaskItem` unit test verifies that clicking Delete calls `onDeleteTask` exactly once with the correct task ID.
 
-I chose this approach because the component should report intent while the parent remains responsible for changing application state.
+I chose this approach because `TaskItem` should report the user's intention while `App` remains responsible for changing state.
 
 ### TaskItem Component Tests
 
@@ -407,40 +445,51 @@ The tests verify:
 - an incomplete task renders an unchecked checkbox
 - a completed task renders a checked checkbox
 - clicking the checkbox reports the correct task ID
+- clicking Delete reports the correct task ID
 
-I chose these tests because they cover the component's visible state and public interaction contract without testing internal implementation details.
+I chose these tests because they cover the component's visible state and public interaction contract without coupling the tests to parent state management.
 
 ### Integration-style Completion Test
 
-I also test task completion through the complete `App` component.
+I test completion through the complete `App` component.
 
 The test creates a task, finds its checkbox, verifies that it starts unchecked, clicks it, and verifies that it becomes checked.
 
-The full flow tested is:
+This proves that callback propagation and immutable state updates are correctly connected across the component tree.
+
+### Integration-style Deletion Test
+
+I also test deletion through the complete `App` component.
+
+The test creates a task, verifies that the task is visible, clicks its Delete button, verifies that the task disappears, and verifies that the task counter returns to zero.
+
+The tested flow is:
 
 ```text
 User creates task
   ↓
 TaskForm
   ↓
-App stores task with completed: false
+App stores task
   ↓
 TaskList
   ↓
 TaskItem
   ↓
-User clicks checkbox
+User clicks Delete
   ↓
-onToggleTask(task.id)
+onDeleteTask(task.id)
   ↓
-App updates task immutably
+App filters task collection
   ↓
-React renders updated task
+React renders updated collection
   ↓
-Checkbox becomes checked
+Task disappears
 ```
 
-I chose this integration-style test because isolated component tests prove individual contracts, but they do not prove that state ownership and callback propagation work correctly across the full component tree.
+I chose this integration-style test because the isolated `TaskItem` test only proves that the callback is called.
+
+The `App` test proves that the complete deletion behavior works from the user's perspective.
 
 ### Test Isolation
 
@@ -561,7 +610,8 @@ Through this project, I am actively practicing:
 - Functional state updates
 - Immutable array updates
 - Immutable object updates
-- `map()` for state transformations
+- `map()` for targeted state transformations
+- `filter()` for immutable deletion
 - Object spread syntax
 - Form submission
 - Input normalization
@@ -570,10 +620,12 @@ Through this project, I am actively practicing:
 - Stable identifiers
 - React list keys
 - Semantic list markup
-- Accessible form controls
+- Accessible controls
+- Explicit button behavior
 - Empty states
 - Component testing
 - Mock functions
+- Positive and negative DOM queries
 - User interaction testing
 - Integration-style component testing
 - Test isolation
