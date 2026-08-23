@@ -1,14 +1,22 @@
 import { useState } from 'react'
 import './App.css'
 import TaskForm from './components/TaskForm'
+import TaskList from './components/TaskList'
 
 function App() {
   const [tasks, setTasks] = useState([])
 
   const handleAddTask = (taskTitle) => {
-    // I keep the task collection in App because multiple components will
-    // eventually need access to it, including the form and the task list.
-    setTasks((currentTasks) => [...currentTasks, taskTitle])
+    const newTask = {
+      // I assign each task a stable ID when it is created so React does not
+      // need to rely on the item's array position when rendering the list.
+      id: crypto.randomUUID(),
+      title: taskTitle,
+    }
+
+    // I use a functional state update because the next collection depends
+    // directly on the previous task collection.
+    setTasks((currentTasks) => [...currentTasks, newTask])
   }
 
   return (
@@ -21,6 +29,8 @@ function App() {
       <p>
         {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} added
       </p>
+
+      <TaskList tasks={tasks} />
     </main>
   )
 }
