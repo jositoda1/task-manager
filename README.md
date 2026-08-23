@@ -44,14 +44,19 @@ The project is currently under active development.
 - Whitespace normalization with `trim()`
 - Validation against empty and whitespace-only task titles
 - Input reset after successful submission
-- Task collection state owned by `App`
+- Parent-owned task collection
+- Functional state updates
+- Task objects with stable IDs
+- Dedicated `TaskList` component
+- Empty task-list state
+- Semantic task list markup
+- Visible rendering of submitted tasks
 - Singular and plural task counter
 - Automated component tests
-- Integration-style test for form-to-parent communication
+- Integration-style tests for component communication
 
 ### Planned
 
-- Task list
 - Task completion
 - Task editing
 - Task deletion
@@ -96,15 +101,13 @@ This also gives me a clearer Git history and allows each pull request to represe
 
 ### Component-based Structure
 
-I chose to move the task form into a dedicated `TaskForm` component instead of keeping the entire interface inside `App.jsx`.
+I chose to separate the interface into focused components instead of keeping all application markup and behavior inside `App.jsx`.
 
-This keeps `App` focused on application composition while allowing the form to have its own responsibility.
+The task form lives in `TaskForm`, while the task collection is displayed by `TaskList`.
 
-The separation also makes the form easier to test independently and prepares it for additional behavior such as validation and submission handling.
+This keeps `App` responsible for application-level state and component composition instead of detailed UI responsibilities.
 
-I deliberately avoided splitting the application into many small components before they are needed.
-
-I prefer introducing abstractions only when there is a clear responsibility to separate, rather than creating complexity prematurely.
+I deliberately avoid creating components before they have a clear responsibility. I prefer introducing abstractions only when they provide a concrete maintenance or testing benefit.
 
 ### Controlled Form State
 
@@ -124,33 +127,23 @@ No other component needs access to what the user is typing before submission, so
 
 ### Parent-owned Task Collection
 
-I chose to keep the submitted task collection in `App` rather than inside `TaskForm`.
+I chose to keep the submitted task collection in `App` rather than inside `TaskForm` or `TaskList`.
 
-`TaskForm` is responsible for collecting and validating user input, while `App` owns data that will eventually be shared with other components such as the task list and task filters.
+`TaskForm` collects and validates input, while `TaskList` renders the collection.
 
-I chose this separation because the task collection represents application-level state, while the unfinished input value is local form state.
+`App` owns the shared task data because multiple components need, or will need, access to it.
 
-This keeps each piece of state as close as possible to the components that actually need it.
+I chose this separation because the task collection represents application-level state, while the unfinished form value is local component state.
 
 ### Callback Prop for Child-to-Parent Communication
 
 I chose to pass an `onAddTask` callback from `App` to `TaskForm`.
 
-When a valid title is submitted, `TaskForm` calls the callback with the normalized title instead of modifying the parent state directly.
+When a valid title is submitted, `TaskForm` calls the callback with the normalized title instead of modifying parent state directly.
 
-This keeps the component boundary explicit:
+I chose this approach because React data flows down through props, while child components can communicate user-driven events upward through callback functions.
 
-```text
-App
-  ↓ onAddTask
-TaskForm
-  ↑ submitted title
-App
-```
-
-I chose this approach because React data normally flows down through props, while child components communicate events upward through callback functions.
-
-I deliberately avoided putting the task collection inside the form because that would mix form responsibilities with application data ownership.
+I deliberately avoided putting the application task collection inside the form because that would mix form responsibilities with application data ownership.
 
 ### Input Normalization and Validation
 
@@ -172,17 +165,68 @@ This prepares the form for the next task while preserving the user's text when s
 
 I chose this behavior because clearing invalid input would remove information the user may want to correct.
 
+### Task Data Model
+
+I initially stored submitted tasks as plain strings because that was sufficient while I was learning the form submission flow.
+
+When I introduced the task list, I changed the task representation to objects:
+
+```js
+{
+  id: crypto.randomUUID(),
+  title: taskTitle,
+}
+```
+
+I chose this approach because each task will need its own identity and will gain additional properties as features such as completion, editing, and persistence are added.
+
+I deliberately avoided adding future properties such as `completed` or timestamps before they are needed. I prefer evolving the data model alongside real application requirements.
+
+### Stable Task IDs
+
+I assign each task a stable ID when it is created using `crypto.randomUUID()`.
+
+I chose a stable ID because React list items need an identity that remains associated with the same task even when the collection changes.
+
+I deliberately avoided using the array index as the React `key` because array positions can change when tasks are deleted, filtered, or reordered.
+
 ### Functional State Updates
 
 When adding a submitted task to the collection, I use a functional state update:
 
 ```js
-setTasks((currentTasks) => [...currentTasks, taskTitle])
+setTasks((currentTasks) => [...currentTasks, newTask])
 ```
 
 I chose this approach because the next task collection depends on the previous state.
 
 Using the previous state provided by React avoids relying on a potentially stale state snapshot and makes the relationship between the old and new state explicit.
+
+### Dedicated TaskList Component
+
+I chose to render the task collection inside a dedicated `TaskList` component instead of placing the list markup directly inside `App`.
+
+This gives the task collection a clear rendering responsibility while leaving `App` focused on state ownership and application composition.
+
+I deliberately avoided creating a `TaskItem` component at this stage because each task currently renders only a title.
+
+I will introduce a separate task-item component when individual tasks gain enough behavior to justify their own responsibility.
+
+### Semantic List Markup
+
+I render the task collection with `<ul>` and `<li>` elements.
+
+I chose semantic list markup because tasks represent a collection of related items.
+
+Using native list elements communicates that structure directly to browsers and assistive technologies without recreating list semantics with generic `<div>` elements.
+
+### Empty State
+
+When the task collection is empty, `TaskList` displays a clear message instead of rendering an empty list.
+
+I chose to provide an explicit empty state because a blank area does not tell the user whether the interface is working or what action to take next.
+
+The message guides the user toward adding the first task while keeping the behavior simple.
 
 ### Accessible Form Structure
 
@@ -202,7 +246,7 @@ For React components, I use React Testing Library.
 
 My tests focus on behavior that a user can observe instead of testing internal React implementation details.
 
-For example, I verify that the task input exists through its accessible role and label instead of selecting it using a CSS class or directly inspecting component state.
+For example, I verify visible task titles instead of inspecting the internal `tasks` state.
 
 I chose this approach because tests based on user-visible behavior are generally less fragile when the internal implementation changes.
 
@@ -222,25 +266,22 @@ I chose this approach because it reflects how users and assistive technologies i
 
 I deliberately avoid relying on CSS selectors or implementation-specific attributes when an accessible query is available.
 
-This has an additional advantage: accessibility problems can also cause tests to fail, which encourages me to maintain meaningful semantic markup.
-
 ### User Interaction Testing
 
 I use `@testing-library/user-event` for interactions such as typing and clicking.
 
 I chose `user-event` because it models user interaction more closely than manually dispatching individual DOM events.
 
-For example, the controlled task input is tested by simulating a user typing into it and then verifying the visible value.
+For example:
 
 ```js
 await user.type(taskInput, 'Buy groceries')
-
-expect(taskInput).toHaveValue('Buy groceries')
+await user.click(submitButton)
 ```
 
-I chose to test the observable result instead of directly testing the internal `useState` value.
+I test the observable result instead of directly inspecting internal React state.
 
-This means the test can remain valid even if I later refactor the internal implementation while preserving the same user behavior.
+This means the tests can remain valid even if I refactor the internal implementation while preserving the same user behavior.
 
 ### Mock Functions for Component Contracts
 
@@ -248,25 +289,47 @@ I use `vi.fn()` when testing whether `TaskForm` communicates correctly with its 
 
 This allows me to verify that the component calls `onAddTask` with the expected normalized value without needing to render the complete application.
 
-I chose this approach because it isolates the public contract of `TaskForm`: valid input should produce one callback call with the correct task title.
+I chose this approach because it isolates the public contract of `TaskForm`.
+
+### TaskList Component Tests
+
+I test `TaskList` independently with predictable task objects.
+
+One test verifies the empty state and another verifies that supplied task titles are visible.
+
+I chose to test visible output rather than internal mapping logic because the important behavior is what the user sees after the component receives a task collection.
+
+The tests use fixed IDs because deterministic test data is easier to understand and does not depend on runtime-generated values.
 
 ### Integration-style Component Testing
 
-In addition to testing `TaskForm` in isolation, I test the complete interaction through `App`.
+In addition to testing components independently, I test the complete interaction through `App`.
 
-The integration-style test simulates a user entering a task, submitting the form, and observing the task counter update.
+The integration-style test simulates a user entering a task, submitting the form, observing the counter update, and verifying that the submitted title appears in the task list.
 
-I chose this additional test because unit-level component tests can prove that the callback is called, but they do not prove that the parent component handles that callback correctly.
+I chose this additional test because isolated component tests can prove that individual contracts work, but they do not prove that the complete component flow is wired together correctly.
 
-Testing both levels gives me confidence in the component contract and in the way the components work together.
+The tested flow is:
+
+```text
+User input
+  ↓
+TaskForm
+  ↓
+onAddTask
+  ↓
+App state
+  ↓
+TaskList
+  ↓
+Visible task
+```
 
 ### Test Isolation
 
 I chose to explicitly clean up the rendered DOM after every test.
 
 Each test should start with a clean environment and must not accidentally depend on elements created by another test.
-
-Without cleanup, multiple component renders can remain in the test DOM and produce misleading failures.
 
 I use:
 
@@ -277,8 +340,6 @@ afterEach(() => {
 ```
 
 I preferred explicit cleanup over enabling additional global Vitest APIs because the project does not currently require global test functions.
-
-This keeps the test configuration intentional and makes the isolation behavior visible and easy to understand.
 
 ### Continuous Integration
 
@@ -295,15 +356,7 @@ npm run build
 
 I chose `npm ci` instead of `npm install` in CI because it installs dependencies using the committed lock file and provides a more reproducible environment.
 
-Linting catches code-quality issues.
-
-Automated tests verify expected application behavior.
-
-The production build confirms that the application can be successfully compiled for deployment.
-
 I chose this pipeline so that every pull request is validated in a clean environment before being integrated into the `main` branch.
-
-Running the same checks locally and in CI reduces the risk of merging code that only works on my development machine.
 
 ## Development Workflow
 
@@ -340,14 +393,6 @@ main
 ```
 
 I chose this workflow because it gives me experience with a development process similar to the one commonly used in collaborative software projects.
-
-Feature branches isolate work from the stable `main` branch.
-
-Pull requests provide a clear review point before integration.
-
-GitHub Actions validates the changes automatically.
-
-Squash merging keeps the history of `main` focused on completed changes rather than every intermediate development commit.
 
 ## Testing
 
@@ -389,7 +434,11 @@ Through this project, I am actively practicing:
 - Form submission
 - Input normalization
 - Input validation
-- Semantic HTML
+- Data-model evolution
+- Stable identifiers
+- React list keys
+- Semantic list markup
+- Empty states
 - Accessibility
 - Component testing
 - Mock functions
