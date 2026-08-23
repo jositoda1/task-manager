@@ -71,4 +71,34 @@ describe('TaskItem', () => {
         expect(onToggleTask).toHaveBeenCalledOnce()
         expect(onToggleTask).toHaveBeenCalledWith('task-1')
     })
+
+    it('requests deletion using the task ID when the delete button is clicked', async () => {
+        const user = userEvent.setup()
+        const onDeleteTask = vi.fn()
+
+        const task = {
+            id: 'task-1',
+            title: 'Buy groceries',
+            completed: false,
+        }
+
+        render(
+            <TaskItem
+                task={task}
+                onToggleTask={vi.fn()}
+                onDeleteTask={onDeleteTask}
+            />,
+        )
+
+        const deleteButton = screen.getByRole('button', {
+            name: /delete/i,
+        })
+
+        await user.click(deleteButton)
+
+        // I verify that TaskItem reports which task should be deleted instead of
+        // testing application state here, because state ownership belongs to App.
+        expect(onDeleteTask).toHaveBeenCalledOnce()
+        expect(onDeleteTask).toHaveBeenCalledWith('task-1')
+    })
 })
