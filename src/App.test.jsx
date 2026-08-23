@@ -72,4 +72,35 @@ describe('App', () => {
 
         expect(taskCheckbox).toBeChecked()
     })
+
+    it('allows a user to delete a task', async () => {
+        const user = userEvent.setup()
+
+        render(<App />)
+
+        const taskInput = screen.getByRole('textbox', {
+            name: /task/i,
+        })
+
+        const submitButton = screen.getByRole('button', {
+            name: /add task/i,
+        })
+
+        await user.type(taskInput, 'Buy groceries')
+        await user.click(submitButton)
+
+        expect(screen.getByText('Buy groceries')).toBeInTheDocument()
+        expect(screen.getByText(/1 task added/i)).toBeInTheDocument()
+
+        const deleteButton = screen.getByRole('button', {
+            name: /delete/i,
+        })
+
+        // I test deletion through the complete user flow because this verifies
+        // that the callback reaches App and updates the shared task collection.
+        await user.click(deleteButton)
+
+        expect(screen.queryByText('Buy groceries')).not.toBeInTheDocument()
+        expect(screen.getByText(/0 tasks added/i)).toBeInTheDocument()
+    })
 })

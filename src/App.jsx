@@ -31,6 +31,14 @@ function App() {
     )
   }
 
+  const handleDeleteTask = (taskId) => {
+    // I use filter to create a new collection without the selected task
+    // instead of mutating the existing React state array.
+    setTasks((currentTasks) =>
+      currentTasks.filter((task) => task.id !== taskId),
+    )
+  }
+
   return (
     <main className="app">
       <h1>Task Manager</h1>
@@ -45,6 +53,7 @@ function App() {
       <TaskList
         tasks={tasks}
         onToggleTask={handleToggleTask}
+        onDeleteTask={handleDeleteTask}
       />
     </main>
   )

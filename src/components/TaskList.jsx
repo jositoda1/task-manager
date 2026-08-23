@@ -1,6 +1,6 @@
 // src/components/TaskList.jsximport TaskItem from './TaskItem'
 import TaskItem from './TaskItem'
-function TaskList({ tasks, onToggleTask }) {
+function TaskList({ tasks, onToggleTask, onDeleteTask }) {
     if (tasks.length === 0) {
         return <p>No tasks yet. Add your first task.</p>
     }
@@ -11,12 +11,13 @@ function TaskList({ tasks, onToggleTask }) {
 
             <ul>
                 {tasks.map((task) => (
-                    // I delegate individual task behavior to TaskItem now that each task
-                    // has its own interactive state and user action.
+                    // I keep TaskList focused on rendering the collection and forwarding
+                    // task actions instead of letting it own application-level state.
                     <TaskItem
                         key={task.id}
                         task={task}
                         onToggleTask={onToggleTask}
+                        onDeleteTask={onDeleteTask}
                     />
                 ))}
             </ul>
