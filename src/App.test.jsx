@@ -38,5 +38,8 @@ describe('App', () => {
         await user.click(submitButton)
 
         expect(screen.getByText(/1 task added/i)).toBeInTheDocument()
+        // I also verify that the submitted task reaches the visible task list,
+        // proving that the form and parent-owned collection work together.
+        expect(screen.getByText('Buy groceries')).toBeInTheDocument()
     })
 })
