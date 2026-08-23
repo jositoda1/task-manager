@@ -8,15 +8,27 @@ function App() {
 
   const handleAddTask = (taskTitle) => {
     const newTask = {
-      // I assign each task a stable ID when it is created so React does not
-      // need to rely on the item's array position when rendering the list.
+      // I create a stable ID once so the task keeps the same identity as its
+      // properties change throughout the application lifecycle.
       id: crypto.randomUUID(),
       title: taskTitle,
+      completed: false,
     }
 
     // I use a functional state update because the next collection depends
     // directly on the previous task collection.
     setTasks((currentTasks) => [...currentTasks, newTask])
+  }
+  const handleToggleTask = (taskId) => {
+    // I update the collection immutably because React state should not be
+    // modified directly, and unchanged tasks can keep their existing objects.
+    setTasks((currentTasks) =>
+      currentTasks.map((task) =>
+        task.id === taskId
+          ? { ...task, completed: !task.completed }
+          : task,
+      ),
+    )
   }
 
   return (
@@ -30,7 +42,10 @@ function App() {
         {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} added
       </p>
 
-      <TaskList tasks={tasks} />
+      <TaskList
+        tasks={tasks}
+        onToggleTask={handleToggleTask}
+      />
     </main>
   )
 }
