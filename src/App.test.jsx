@@ -42,4 +42,34 @@ describe('App', () => {
         // proving that the form and parent-owned collection work together.
         expect(screen.getByText('Buy groceries')).toBeInTheDocument()
     })
+
+
+    it('allows a user to mark a task as completed', async () => {
+        const user = userEvent.setup()
+
+        render(<App />)
+
+        const taskInput = screen.getByRole('textbox', {
+            name: /task/i,
+        })
+
+        const submitButton = screen.getByRole('button', {
+            name: /add task/i,
+        })
+
+        await user.type(taskInput, 'Buy groceries')
+        await user.click(submitButton)
+
+        const taskCheckbox = screen.getByRole('checkbox', {
+            name: /buy groceries/i,
+        })
+
+        expect(taskCheckbox).not.toBeChecked()
+
+        // I test the complete user flow here because this verifies that TaskItem,
+        // TaskList, and the parent-owned task state work correctly together.
+        await user.click(taskCheckbox)
+
+        expect(taskCheckbox).toBeChecked()
+    })
 })

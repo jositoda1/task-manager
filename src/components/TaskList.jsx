@@ -1,6 +1,6 @@
-// src/components/TaskList.jsx
-
-function TaskList({ tasks }) {
+// src/components/TaskList.jsximport TaskItem from './TaskItem'
+import TaskItem from './TaskItem'
+function TaskList({ tasks, onToggleTask }) {
     if (tasks.length === 0) {
         return <p>No tasks yet. Add your first task.</p>
     }
@@ -11,9 +11,13 @@ function TaskList({ tasks }) {
 
             <ul>
                 {tasks.map((task) => (
-                    // I use a stable task ID as the React key because list positions
-                    // can change later when tasks are deleted, filtered, or reordered.
-                    <li key={task.id}>{task.title}</li>
+                    // I delegate individual task behavior to TaskItem now that each task
+                    // has its own interactive state and user action.
+                    <TaskItem
+                        key={task.id}
+                        task={task}
+                        onToggleTask={onToggleTask}
+                    />
                 ))}
             </ul>
         </section>
