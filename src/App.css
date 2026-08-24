@@ -198,6 +198,21 @@
 }
 
 
+/* I use a neutral secondary variant for supporting actions so Edit and
+   Cancel remain available without competing visually with primary actions. */
+.button--secondary {
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+}
+
+.button--secondary:hover {
+  background: var(--color-background);
+}
+
+
+
+
 /* -------------------------------------------------------
    Task counter
    ------------------------------------------------------- */
@@ -302,6 +317,23 @@
 }
 
 
+
+/* I group related task actions with Flexbox because the buttons need
+   simple one-dimensional alignment and consistent spacing. */
+.task-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.task-item__edit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+
+  width: 100%;
+}
+
 /* -------------------------------------------------------
    Empty state
    ------------------------------------------------------- */
@@ -356,5 +388,13 @@
 
   .button--danger {
     align-self: flex-end;
+  }
+
+  .task-item__edit {
+    grid-template-columns: 1fr;
+  }
+
+  .task-item__actions {
+    justify-content: flex-end;
   }
 }

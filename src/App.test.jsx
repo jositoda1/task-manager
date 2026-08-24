@@ -103,4 +103,50 @@ describe('App', () => {
         expect(screen.queryByText('Buy groceries')).not.toBeInTheDocument()
         expect(screen.getByText(/0 tasks added/i)).toBeInTheDocument()
     })
+    it('allows a user to edit an existing task', async () => {
+        const user = userEvent.setup()
+
+        render(<App />)
+
+        const taskInput = screen.getByRole('textbox', {
+            name: /task/i,
+        })
+
+        await user.type(taskInput, 'Buy groceries')
+
+        await user.click(
+            screen.getByRole('button', {
+                name: /add task/i,
+            }),
+        )
+
+        await user.click(
+            screen.getByRole('button', {
+                name: /edit buy groceries/i,
+            }),
+        )
+
+        const editInput = screen.getByRole('textbox', {
+            name: /edit buy groceries/i,
+        })
+
+        await user.clear(editInput)
+        await user.type(editInput, 'Buy vegetables')
+
+        await user.click(
+            screen.getByRole('button', {
+                name: /save/i,
+            }),
+        )
+
+        // I verify the complete editing flow through visible application output
+        // because App owns the persistent title and must propagate it back down.
+        expect(
+            screen.queryByText('Buy groceries'),
+        ).not.toBeInTheDocument()
+
+        expect(
+            screen.getByText('Buy vegetables'),
+        ).toBeInTheDocument()
+    })
 })
