@@ -39,6 +39,18 @@ function App() {
     )
   }
 
+  const handleEditTask = (taskId, newTitle) => {
+    // I update only the matching task while preserving every other task
+    // and property through an immutable state transformation.
+    setTasks((currentTasks) =>
+      currentTasks.map((task) =>
+        task.id === taskId
+          ? { ...task, title: newTitle }
+          : task,
+      ),
+    )
+  }
+
   return (
     <main className="app">
       <header className="app-header">
@@ -57,6 +69,7 @@ function App() {
           tasks={tasks}
           onToggleTask={handleToggleTask}
           onDeleteTask={handleDeleteTask}
+          onEditTask={handleEditTask}
         />
       </section>
     </main>

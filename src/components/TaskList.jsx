@@ -1,7 +1,12 @@
 // src/components/TaskList.jsx
 import TaskItem from './TaskItem'
 
-function TaskList({ tasks, onToggleTask, onDeleteTask }) {
+function TaskList({
+    tasks,
+    onToggleTask,
+    onDeleteTask,
+    onEditTask,
+}) {
     if (tasks.length === 0) {
         return (
             <p className="empty-state">
@@ -18,11 +23,14 @@ function TaskList({ tasks, onToggleTask, onDeleteTask }) {
 
             <ul className="task-list__items">
                 {tasks.map((task) => (
+                    // I keep TaskList responsible for rendering and forwarding actions
+                    // while App remains the owner of the shared task collection.
                     <TaskItem
                         key={task.id}
                         task={task}
                         onToggleTask={onToggleTask}
                         onDeleteTask={onDeleteTask}
+                        onEditTask={onEditTask}
                     />
                 ))}
             </ul>
