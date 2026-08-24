@@ -149,4 +149,71 @@ describe('App', () => {
             screen.getByText('Buy vegetables'),
         ).toBeInTheDocument()
     })
+
+    it('filters tasks by completion status', async () => {
+        const user = userEvent.setup()
+
+        render(<App />)
+
+        const taskInput = screen.getByRole('textbox', {
+            name: /task/i,
+        })
+
+        const addButton = screen.getByRole('button', {
+            name: /add task/i,
+        })
+
+        await user.type(taskInput, 'Active task')
+        await user.click(addButton)
+
+        await user.type(taskInput, 'Completed task')
+        await user.click(addButton)
+
+        await user.click(
+            screen.getByRole('checkbox', {
+                name: /completed task/i,
+            }),
+        )
+
+        // I first verify that both tasks are visible with the default All filter
+        // so the test establishes the starting state before changing visibility.
+        expect(screen.getByText('Active task')).toBeInTheDocument()
+        expect(screen.getByText('Completed task')).toBeInTheDocument()
+
+        await user.click(
+            screen.getByRole('button', {
+                name: /^active$/i,
+            }),
+        )
+
+        // I use exact accessible-name matching for filter buttons because task
+        // action labels can also contain words such as "Active" or "Completed".
+        expect(screen.getByText('Active task')).toBeInTheDocument()
+        expect(
+            screen.queryByText('Completed task'),
+        ).not.toBeInTheDocument()
+
+        await user.click(
+            screen.getByRole('button', {
+                name: /^completed$/i,
+            }),
+        )
+
+        expect(
+            screen.queryByText('Active task'),
+        ).not.toBeInTheDocument()
+
+        expect(
+            screen.getByText('Completed task'),
+        ).toBeInTheDocument()
+
+        await user.click(
+            screen.getByRole('button', {
+                name: /^all$/i,
+            }),
+        )
+
+        expect(screen.getByText('Active task')).toBeInTheDocument()
+        expect(screen.getByText('Completed task')).toBeInTheDocument()
+    })
 })

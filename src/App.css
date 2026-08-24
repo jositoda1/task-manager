@@ -352,6 +352,51 @@
   border-radius: var(--radius-medium);
 }
 
+/* -------------------------------------------------------
+   Task filters
+   ------------------------------------------------------- */
+
+/* I use Flexbox because the filter controls form a single horizontal group
+   whose main requirement is alignment and consistent spacing. */
+.task-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* I keep filter buttons visually lighter than primary actions because
+   changing visibility does not modify task data. */
+.button--filter {
+  min-height: 36px;
+  padding: 0.45rem 0.8rem;
+
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+
+  border-color: var(--color-border-strong);
+
+  font-size: 0.875rem;
+}
+
+.button--filter:hover {
+  color: var(--color-text);
+  background: var(--color-background);
+}
+
+/* I give the selected filter stronger contrast so its current state is
+   visible while aria-pressed communicates the same state semantically. */
+.button--filter-active {
+  color: #ffffff;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.button--filter-active:hover {
+  color: #ffffff;
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
 
 /* -------------------------------------------------------
    Responsive layout

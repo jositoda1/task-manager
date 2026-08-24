@@ -2,9 +2,11 @@ import { useState } from 'react'
 import './App.css'
 import TaskForm from './components/TaskForm'
 import TaskList from './components/TaskList'
+import TaskFilters from './components/TaskFilters'
 
 function App() {
   const [tasks, setTasks] = useState([])
+  const [filter, setFilter] = useState('all')
 
   const handleAddTask = (taskTitle) => {
     const newTask = {
@@ -51,6 +53,19 @@ function App() {
     )
   }
 
+  // I derive the visible collection from the source task state and the
+  // selected filter instead of storing a duplicated filtered task list.
+  const visibleTasks = tasks.filter((task) => {
+    if (filter === 'active') {
+      return !task.completed
+    }
+
+    if (filter === 'completed') {
+      return task.completed
+    }
+
+    return true
+  })
   return (
     <main className="app">
       <header className="app-header">
@@ -64,9 +79,13 @@ function App() {
         <p className="task-count">
           {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} added
         </p>
+        <TaskFilters
+          activeFilter={filter}
+          onFilterChange={setFilter}
+        />
 
         <TaskList
-          tasks={tasks}
+          tasks={visibleTasks}
           onToggleTask={handleToggleTask}
           onDeleteTask={handleDeleteTask}
           onEditTask={handleEditTask}
