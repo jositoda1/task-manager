@@ -80,10 +80,15 @@ The project is currently under active development.
 - Edited-title trimming and whitespace validation
 - Immutable title updates with `map()`
 - Integration-style task editing test
+- Task filtering with All, Active, and Completed views
+- Dedicated `TaskFilters` component
+- Selected filter state with `aria-pressed`
+- Derived visible task collection without duplicated state
+- Exact accessible-name queries for filter controls
+- Integration-style filtering test
 
 ### Planned
 
-- Task filtering
 - Local storage persistence
 - Automated deployment
 
@@ -583,6 +588,194 @@ The action group uses Flexbox because Save and Cancel need simple one-dimensiona
 
 I chose to reuse the existing layout principles instead of introducing a different styling technique specifically for edit mode.
 
+### Dedicated TaskFilters Component
+
+I introduced a dedicated `TaskFilters` component for the `All`, `Active`, and `Completed` controls.
+
+I chose a separate component because filtering is now a distinct interface responsibility with its own rendering logic, accessibility state, interaction contract, and tests.
+
+`TaskFilters` does not own the application task collection. It receives the current filter and reports user selections through props.
+
+This keeps the component focused on presentation and interaction while `App` remains responsible for application-level state.
+
+### Filter Configuration as Data
+
+The available filters are represented as a small configuration array:
+
+```js
+const filters = [
+  {
+    value: 'all',
+    label: 'All',
+  },
+  {
+    value: 'active',
+    label: 'Active',
+  },
+  {
+    value: 'completed',
+    label: 'Completed',
+  },
+]
+```
+
+I chose to map over configuration data instead of manually duplicating three nearly identical button elements.
+
+At this point the controls share the same structure and behavior, so the small abstraction removes unnecessary repetition without hiding important application logic.
+
+### Filter State in App
+
+I keep the selected filter in `App`:
+
+```js
+const [filter, setFilter] = useState('all')
+```
+
+I chose `App` because the selected filter determines which tasks are passed to `TaskList`.
+
+The filter is application-level UI state: multiple child components participate in the result, so keeping it at their closest shared owner makes the data flow explicit.
+
+### Source State and Derived Data
+
+The complete task collection remains the source state.
+
+The visible task collection is derived from `tasks` and `filter`:
+
+```js
+const visibleTasks = tasks.filter((task) => {
+  if (filter === 'active') {
+    return !task.completed
+  }
+
+  if (filter === 'completed') {
+    return task.completed
+  }
+
+  return true
+})
+```
+
+I deliberately do not create a second state variable such as:
+
+```js
+const [filteredTasks, setFilteredTasks] = useState([])
+```
+
+because that would duplicate information already available from the source task collection and the selected filter.
+
+Duplicated state creates synchronization risk. A separate filtered collection would need to stay correct after task creation, completion, editing, deletion, and every future task mutation.
+
+By deriving `visibleTasks` during rendering, React always calculates the current view from the latest source data.
+
+### Why I Did Not Use useEffect for Filtering
+
+I do not use `useEffect` to synchronize a filtered task list.
+
+Filtering is a pure calculation based on values already available during rendering, so an effect would add unnecessary state synchronization and another render cycle.
+
+I chose direct derivation because the operation is small, deterministic, and easy to reason about.
+
+If filtering later became computationally expensive with a very large collection, memoization could be evaluated based on measured performance rather than added prematurely.
+
+### Filter Semantics
+
+The filtering rules are intentionally simple:
+
+```text
+All
+  -> every task
+
+Active
+  -> completed === false
+
+Completed
+  -> completed === true
+```
+
+I chose to derive the views from the existing `completed` property instead of storing a separate status value.
+
+This keeps completion state normalized and avoids representing the same concept in multiple forms.
+
+### Total Count Versus Visible Count
+
+The task counter continues to use:
+
+```js
+tasks.length
+```
+
+instead of:
+
+```js
+visibleTasks.length
+```
+
+I chose this because the current text describes how many tasks exist in the application, not how many happen to be visible under the selected filter.
+
+Filtering changes presentation, not the underlying collection.
+
+### Passing setFilter Directly
+
+`TaskFilters` receives:
+
+```jsx
+onFilterChange={setFilter}
+```
+
+I chose to pass the state setter directly because there is currently no additional application logic required when the filter changes.
+
+A wrapper such as:
+
+```js
+const handleFilterChange = (newFilter) => {
+  setFilter(newFilter)
+}
+```
+
+would only forward the same value.
+
+If the interaction later needs analytics, URL synchronization, validation, or another side effect, I can introduce a dedicated handler at that point.
+
+### aria-pressed for Filter Selection
+
+Each filter is a button with an `aria-pressed` value that reflects whether it is currently selected.
+
+```jsx
+aria-pressed={isActive}
+```
+
+I chose `aria-pressed` because these controls behave like toggle-style selection buttons.
+
+The selected filter therefore has both a visual state and a semantic state available to assistive technologies.
+
+I deliberately avoid relying only on an active CSS class to communicate selection.
+
+### Filtering Preserves Source Tasks
+
+Applying a filter never modifies the original task objects or removes tasks from the source collection.
+
+The filter only changes which task objects are passed to `TaskList`.
+
+I chose this separation because filtering is a view concern. A user switching from `Completed` back to `All` should immediately see the same underlying data again.
+
+### Filter Buttons Do Not Mutate Task Data
+
+The filter buttons use a lighter visual treatment than primary or destructive task actions.
+
+Changing from `All` to `Active` or `Completed` changes visibility only; it does not create, edit, complete, or delete task data.
+
+I chose a separate filter button variant so the visual hierarchy reflects the lower consequence of the action.
+
+### Flexbox for Filter Controls
+
+The filter controls use Flexbox.
+
+They form one horizontal control group whose main layout requirements are alignment, spacing, and wrapping on narrower screens.
+
+I chose Flexbox instead of Grid here because the layout is primarily one-dimensional.
+
+This follows the same layout principle used throughout the application: Grid for structural two-dimensional relationships and Flexbox for aligned component groups.
+
 ## Visual Design Decisions
 
 ### Styling After Core Behavior
@@ -1030,6 +1223,98 @@ The isolated `TaskItem` tests cover:
 
 I chose these tests because they describe the local editing contract independently from the application-level state implementation.
 
+### TaskFilters Component Tests
+
+The isolated `TaskFilters` tests verify two responsibilities:
+
+- the currently selected filter exposes the correct `aria-pressed` state
+- selecting a filter reports the expected filter value to the parent
+
+I chose these tests because they define the component contract independently from `App`.
+
+The component does not need to know how tasks are filtered. It only needs to render the available controls, expose selection semantically, and report user intent correctly.
+
+### Exact Accessible Names for Filter Queries
+
+During the filtering integration test, a broad query such as:
+
+```js
+screen.getByRole('button', {
+  name: /active/i,
+})
+```
+
+matched more than the `Active` filter button.
+
+Task-specific action labels such as:
+
+```text
+Edit Active task
+Delete Active task
+```
+
+also contain the word `Active`.
+
+I changed the filter query to exact accessible-name matching:
+
+```js
+screen.getByRole('button', {
+  name: /^active$/i,
+})
+```
+
+and apply the same pattern to `Completed` and `All`.
+
+I chose this instead of `getAllByRole()` because the test expects one specific control, not an arbitrary item from several matches.
+
+This keeps the test aligned with the accessible name of the intended button and makes failures more meaningful.
+
+### Integration-style Filtering Test
+
+I test filtering through the complete `App` component.
+
+The test:
+
+1. creates an active task
+2. creates a second task
+3. marks the second task as completed
+4. verifies both are visible under the default `All` filter
+5. selects `Active` and verifies only the incomplete task remains visible
+6. selects `Completed` and verifies only the completed task remains visible
+7. selects `All` and verifies both tasks become visible again
+
+The interaction flow is:
+
+```text
+tasks + filter
+     ↓
+visibleTasks is derived
+     ↓
+TaskList receives visibleTasks
+     ↓
+user selects another filter
+     ↓
+filter state changes
+     ↓
+visibleTasks is derived again
+     ↓
+TaskList renders the new view
+```
+
+I chose an integration test because the most important behavior crosses component boundaries.
+
+An isolated `TaskFilters` test can prove that the component reports `completed`, but it cannot prove that `App` derives the correct task collection and passes it to `TaskList`.
+
+### Testing a Failed Expectation Versus an Application Bug
+
+While developing the filtering test, the application correctly displayed only the completed task after the `Completed` filter was selected, but the test initially expected the active task to remain visible.
+
+The rendered DOM and `aria-pressed="true"` state made it clear that the application behavior was correct and the expectation was wrong.
+
+I corrected the test sequence rather than changing working application code.
+
+This reinforced an important testing principle: a failing test is evidence that something disagrees with the expectation, but the failure must still be diagnosed before deciding whether the product code or the test is incorrect.
+
 ### Test Isolation
 
 I explicitly clean up the rendered DOM after every test.
@@ -1109,7 +1394,16 @@ Squash merging keeps the history of `main` focused on completed features rather 
 
 ## Testing
 
-The current suite contains 20 automated tests covering component behavior and application-level interaction flows.
+The current suite contains 23 automated tests covering component behavior and application-level interaction flows.
+
+| Test area | Tests |
+| --- | ---: |
+| `TaskForm` | 5 |
+| `TaskFilters` | 2 |
+| `TaskList` | 2 |
+| `TaskItem` | 8 |
+| `App` integration behavior | 6 |
+| **Total** | **23** |
 
 Run the complete test suite with:
 
@@ -1186,6 +1480,15 @@ Through this project, I am actively practicing:
 - Callback wiring across multiple component levels
 - Immutable property updates with object spread
 - Unit tests versus integration tests for component wiring
+- Source state versus derived data
+- Avoiding duplicated React state
+- Deriving filtered collections during render
+- Knowing when `useEffect` is unnecessary
+- Accessible toggle-button state with `aria-pressed`
+- Exact accessible-name matching in Testing Library
+- Diagnosing whether a failing test or application behavior is incorrect
+- Flexbox for compact control groups
+- View-level filtering without mutating source data
 - CSS comments that document design intent
 - Component testing
 - Mock functions
