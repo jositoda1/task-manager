@@ -63,13 +63,22 @@ The project is currently under active development.
 - Integration-style tests for component communication
 - Integration-style task completion test
 - Integration-style task deletion test
+- Responsive application layout
+- CSS Grid for structural layout
+- Flexbox for component alignment
+- CSS custom properties for shared design values
+- Reusable primary, danger, and small button variants
+- Styled form controls
+- Hover, active, and focus-visible interaction states
+- Visual styling for completed tasks
+- Responsive mobile layout
+- Task-specific accessible delete labels
 
 ### Planned
 
 - Task editing
 - Task filtering
 - Local storage persistence
-- Responsive interface
 - Automated deployment
 
 ## Tech Stack
@@ -78,6 +87,8 @@ The project is currently under active development.
 - Vite
 - JavaScript
 - CSS
+- CSS Grid
+- Flexbox
 - Vitest
 - React Testing Library
 - Testing Library User Event
@@ -368,6 +379,14 @@ I also locate the delete action by its accessible button role and visible label.
 
 I chose accessible queries and semantic controls because they reflect how users interact with the interface rather than how the DOM happens to be structured internally.
 
+For repeated Delete buttons, I also provide a task-specific accessible label:
+
+```jsx
+aria-label={`Delete ${task.title}`}
+```
+
+I chose this because several controls may share the same visible text, while assistive technologies benefit from knowing which task each destructive action affects.
+
 ### Empty State
 
 When the task collection is empty, `TaskList` displays a clear message instead of rendering an empty list.
@@ -375,6 +394,282 @@ When the task collection is empty, `TaskList` displays a clear message instead o
 I chose to provide an explicit empty state because a blank area does not tell the user whether the interface is working or what action to take next.
 
 After the final task is deleted, the application naturally returns to this empty state because it is derived from the task collection.
+
+## Visual Design Decisions
+
+### Styling After Core Behavior
+
+I chose to introduce the responsive visual system after the core task interactions were already working.
+
+At that point, the application already had real form behavior, task rendering, completion, deletion, and automated tests.
+
+I chose this order because it allowed me to design around real components and real states instead of styling hypothetical interface elements.
+
+It also meant that the existing test suite could protect application behavior while I changed presentation and layout.
+
+### Plain CSS Instead of Bootstrap
+
+I deliberately chose not to install Bootstrap or another CSS framework for this stage of the project.
+
+I wanted the interface to have the clarity and consistency commonly associated with component frameworks while still understanding and implementing the underlying CSS myself.
+
+Using plain CSS gives me direct practice with:
+
+- layout systems
+- reusable visual patterns
+- responsive behavior
+- semantic variants
+- interaction states
+- accessibility
+- CSS architecture
+
+Bootstrap could reduce the amount of CSS required, but it would also hide some of the layout and styling decisions that I specifically want to understand and demonstrate in this portfolio project.
+
+### Small Design System
+
+I created a small reusable visual system instead of styling every component independently.
+
+Shared colors, borders, radii, shadows, and focus values are defined centrally and reused throughout the interface.
+
+I chose this approach because repeated visual values should have a single source of truth.
+
+This gives the project some of the maintainability benefits of a UI framework without introducing an external dependency.
+
+### CSS Custom Properties
+
+I use CSS custom properties for shared design values.
+
+For example:
+
+```css
+--color-primary: #0d6efd;
+--color-primary-hover: #0b5ed7;
+--color-danger: #dc3545;
+--color-border: #dee2e6;
+--color-text-muted: #6c757d;
+```
+
+I chose custom properties instead of repeating literal values throughout the stylesheet.
+
+This makes visual changes easier to apply consistently and keeps the relationship between components clear.
+
+I deliberately avoid creating variables for every single CSS value. I introduce shared properties only when they represent a reusable design decision.
+
+### CSS Grid for Structural Layout
+
+I use CSS Grid for layout problems that involve structural regions or column relationships.
+
+The main application uses Grid to create consistent vertical spacing between major sections.
+
+The task form also uses Grid:
+
+```css
+.task-form__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+}
+```
+
+I chose this layout because the input should consume the available horizontal space while the Add task button keeps the width required by its content.
+
+I use `minmax(0, 1fr)` instead of only `1fr` so the flexible column is explicitly allowed to shrink inside the available container width.
+
+This becomes useful when content grows or the available space becomes limited.
+
+### Flexbox for Component Alignment
+
+I use Flexbox inside individual task items.
+
+For example:
+
+```css
+.task-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+```
+
+I chose Flexbox because the task content and its action need one-dimensional alignment across the same row.
+
+My layout rule in this project is therefore:
+
+```text
+Grid
+  -> structural regions
+  -> column relationships
+Flexbox
+  -> alignment inside a component
+  -> one-dimensional distribution
+```
+
+I deliberately avoid using Grid everywhere or Flexbox everywhere. I choose the layout model based on the problem each component needs to solve.
+
+### Responsive Form Layout
+
+On wider screens, the task input and Add task button are displayed side by side.
+
+On smaller screens, the form switches to a single-column layout.
+
+I chose this behavior because a compact horizontal layout works well when enough space is available, while full-width controls are easier to read and use on narrow screens.
+
+The responsive change is implemented with CSS rather than JavaScript because viewport-based layout is a presentation concern.
+
+### Responsive Task Items
+
+Task items use a horizontal layout on wider screens.
+
+On smaller screens, the task content and action can stack vertically so long task titles do not compete with the Delete button for limited horizontal space.
+
+I chose this approach because responsive design should protect content readability rather than simply shrink every element.
+
+### Fluid Heading Size
+
+The application heading uses `clamp()` for fluid typography.
+
+For example:
+
+```css
+font-size: clamp(2.25rem, 6vw, 3.5rem);
+```
+
+I chose `clamp()` because it allows the heading to respond to viewport size while still respecting clear minimum and maximum sizes.
+
+This reduces the need for additional typography-specific media queries.
+
+### Card-like Application Surface
+
+I group the main task controls inside a surface with a border, rounded corners, and a restrained shadow.
+
+I chose a card-like treatment because it creates a clear visual hierarchy between the page background and the interactive application area.
+
+I deliberately keep the shadow subtle because the goal is separation and depth, not decoration.
+
+### Reusable Button Base Class
+
+I created a reusable base button class and separate semantic variants.
+
+The structure includes:
+
+```text
+button
+button--primary
+button--danger
+button--small
+```
+
+The base class owns shared behavior such as:
+
+- alignment
+- minimum height
+- padding
+- font weight
+- border radius
+- cursor behavior
+- transitions
+- focus feedback
+- active feedback
+
+I chose this structure because shared button behavior should not be duplicated across every action.
+
+### Primary Action Styling
+
+The Add task button uses the primary visual treatment.
+
+I chose stronger visual emphasis for this action because adding a task is the main constructive action in the current interface.
+
+The primary variant uses a dedicated color and hover state so the control remains visually consistent while still providing interaction feedback.
+
+### Destructive Action Styling
+
+The Delete button uses a danger variant.
+
+I chose a separate destructive treatment because deletion has a different meaning and consequence from normal actions.
+
+The distinct styling helps users recognize that the action removes data before they activate it.
+
+### Small Button Variant
+
+The Delete action uses a smaller button variant inside each task item.
+
+I chose this because the task title should remain the main visual content of the row, while the delete action should remain available without dominating the component.
+
+The smaller size is still designed to remain comfortably interactive.
+
+### Styled Form Controls
+
+I style the task input with consistent padding, border, radius, placeholder color, and focus feedback.
+
+I chose a reusable form-control class because form fields should share a predictable visual language as the project grows.
+
+This also avoids tying input styling to one specific component.
+
+### Visible Focus States
+
+Interactive controls include visible keyboard focus feedback.
+
+I use a focus ring rather than relying only on a subtle border-color change.
+
+I chose this because keyboard users need a clear indication of which control currently has focus.
+
+The project therefore treats focus feedback as part of the interface design rather than as a browser detail to remove.
+
+### Hover and Active States
+
+Buttons and task items include lightweight hover feedback, and buttons also include an active state.
+
+I chose short transitions so users receive interaction feedback without creating distracting animation.
+
+The active state slightly changes the button position to reinforce the physical feeling of pressing a control.
+
+### Completed Task Styling
+
+Completed tasks keep their title visible but reduce its visual emphasis and apply a line-through treatment.
+
+I chose this approach because completion should be immediately understandable while the original task remains available as context.
+
+I deliberately do not hide completed tasks automatically because filtering behavior will be introduced as its own feature later.
+
+### Accessible Delete Labels
+
+Each delete button keeps the concise visible text `Delete`, but it also includes a task-specific accessible label.
+
+For example:
+
+```jsx
+aria-label={`Delete ${task.title}`}
+```
+
+I chose this because a visual list may contain several buttons that all display the word `Delete`.
+
+A screen reader should instead be able to distinguish controls such as:
+
+```text
+Delete Buy groceries
+Delete Study React
+```
+
+This keeps the visual interface concise while providing more context to assistive technologies.
+
+### Responsive Design Without JavaScript
+
+I implement viewport-based layout changes with CSS media queries.
+
+I deliberately avoid reading the viewport width in React state because no application behavior depends on screen size.
+
+Keeping responsive layout in CSS reduces JavaScript complexity and keeps presentation concerns in the stylesheet.
+
+### Comments as Design Documentation
+
+I use CSS comments for non-obvious layout and design decisions.
+
+The comments explain why Grid or Flexbox was chosen, why a responsive breakpoint exists, and why reusable variants are structured in a particular way.
+
+I deliberately avoid comments that simply translate CSS syntax into English.
+
+The goal is to document intent and tradeoffs so the stylesheet remains useful as a learning and maintenance resource.
 
 ### Testing Strategy
 
@@ -623,6 +918,21 @@ Through this project, I am actively practicing:
 - Accessible controls
 - Explicit button behavior
 - Empty states
+- Responsive design
+- CSS custom properties
+- CSS Grid
+- Flexbox
+- `minmax()` grid sizing
+- Fluid typography with `clamp()`
+- Media queries
+- Reusable CSS component patterns
+- Primary and destructive action variants
+- Form-control styling
+- Hover, active, and focus-visible states
+- Visual state communication
+- Accessible repeated actions
+- Separation of presentation and application logic
+- CSS comments that document design intent
 - Component testing
 - Mock functions
 - Positive and negative DOM queries
