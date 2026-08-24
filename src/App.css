@@ -1,5 +1,360 @@
+/* -------------------------------------------------------
+   Application layout
+   ------------------------------------------------------- */
+
+/* I use Grid for the main page because the application is composed
+   of vertically separated regions that need consistent spacing. */
 .app {
-  width: min(100% - 2rem, 1200px);
+  display: grid;
+  gap: 2rem;
+
+  width: min(100% - 2rem, 760px);
   margin-inline: auto;
-  padding-block: 2rem;
+  padding-block: 4rem;
+}
+
+
+/* -------------------------------------------------------
+   Header
+   ------------------------------------------------------- */
+
+.app-header {
+  display: grid;
+  gap: 0.5rem;
+
+  text-align: center;
+}
+
+.app-header h1 {
+  margin: 0;
+
+  font-size: clamp(2.25rem, 6vw, 3.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+
+.app-header p {
+  margin: 0;
+
+  color: var(--color-text-muted);
+  font-size: 1.1rem;
+}
+
+
+/* -------------------------------------------------------
+   Main card
+   ------------------------------------------------------- */
+
+/* I use a card-like surface to visually group related task controls,
+   similar to common dashboard interfaces without depending on a UI framework. */
+.app-content {
+  display: grid;
+  gap: 1.75rem;
+
+  padding: 2rem;
+
+  background: var(--color-surface);
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+
+  box-shadow: var(--shadow-card);
+}
+
+
+/* -------------------------------------------------------
+   Task form
+   ------------------------------------------------------- */
+
+.task-form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.task-form__label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* I use Grid here because the input should consume the remaining
+   horizontal space while the button keeps its natural width. */
+.task-form__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+}
+
+
+/* -------------------------------------------------------
+   Form controls
+   ------------------------------------------------------- */
+
+.form-control {
+  width: 100%;
+  min-height: 44px;
+
+  padding: 0.65rem 0.8rem;
+
+  color: var(--color-text);
+  background: var(--color-surface);
+
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.form-control::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* I combine border and shadow feedback on focus so keyboard and form
+   interaction remains clearly visible without relying only on color. */
+.form-control:focus {
+  border-color: var(--color-primary);
+  outline: 0;
+  box-shadow: 0 0 0 0.25rem var(--color-focus);
+}
+
+
+/* -------------------------------------------------------
+   Reusable buttons
+   ------------------------------------------------------- */
+
+/* I keep the shared button behavior in one base class and apply
+   semantic variants separately, similar to a small component system. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 44px;
+
+  padding: 0.65rem 1rem;
+
+  font-weight: 600;
+  line-height: 1;
+
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+
+  cursor: pointer;
+
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 100ms ease;
+}
+
+.button:hover {
+  text-decoration: none;
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+.button:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 0.25rem var(--color-focus);
+}
+
+
+/* Primary actions use the strongest visual emphasis because they
+   represent the main action available in the current interface. */
+.button--primary {
+  color: #ffffff;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.button--primary:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+
+/* Destructive actions have their own semantic color so users can
+   distinguish deletion from normal application actions immediately. */
+.button--danger {
+  color: #ffffff;
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.button--danger:hover {
+  background: var(--color-danger-hover);
+  border-color: var(--color-danger-hover);
+}
+
+.button--small {
+  min-height: 36px;
+  padding: 0.45rem 0.75rem;
+
+  font-size: 0.875rem;
+}
+
+
+/* -------------------------------------------------------
+   Task counter
+   ------------------------------------------------------- */
+
+.task-count {
+  margin: 0;
+
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+
+/* -------------------------------------------------------
+   Task list
+   ------------------------------------------------------- */
+
+.task-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.task-list__heading {
+  margin: 0;
+
+  font-size: 1.4rem;
+}
+
+.task-list__items {
+  display: grid;
+  gap: 0.75rem;
+
+  margin: 0;
+  padding: 0;
+
+  list-style: none;
+}
+
+
+/* -------------------------------------------------------
+   Individual task
+   ------------------------------------------------------- */
+
+/* I use Flexbox inside each task because the content and action
+   need one-dimensional alignment across the same horizontal row. */
+.task-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+
+  min-height: 58px;
+
+  padding: 0.75rem 1rem;
+
+  background: var(--color-surface);
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+
+  box-shadow: var(--shadow-small);
+
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease;
+}
+
+.task-item:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.08);
+}
+
+.task-item__content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+
+  min-width: 0;
+
+  cursor: pointer;
+}
+
+.task-item__checkbox {
+  width: 1.1rem;
+  height: 1.1rem;
+
+  flex: 0 0 auto;
+
+  accent-color: var(--color-primary);
+}
+
+.task-item__title {
+  overflow-wrap: anywhere;
+}
+
+
+/* I communicate completion visually without removing the original
+   task title, preserving context while reducing its visual priority. */
+.task-item--completed .task-item__title {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+
+/* -------------------------------------------------------
+   Empty state
+   ------------------------------------------------------- */
+
+.empty-state {
+  margin: 0;
+
+  padding: 1.5rem;
+
+  color: var(--color-text-muted);
+  text-align: center;
+
+  background: #f8f9fa;
+
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-medium);
+}
+
+
+/* -------------------------------------------------------
+   Responsive layout
+   ------------------------------------------------------- */
+
+/* I switch the form to a single-column layout on smaller screens
+   because horizontal space becomes more valuable than compactness. */
+@media (max-width: 600px) {
+  .app {
+    gap: 1.5rem;
+
+    width: min(100% - 1rem, 760px);
+    padding-block: 2rem;
+  }
+
+  .app-content {
+    padding: 1.25rem;
+  }
+
+  .task-form__row {
+    grid-template-columns: 1fr;
+  }
+
+  .button--primary {
+    width: 100%;
+  }
+
+  /* I stack task content and destructive actions on narrow screens
+     so long titles do not compete with the delete button for space. */
+  .task-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .button--danger {
+    align-self: flex-end;
+  }
 }

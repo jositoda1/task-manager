@@ -1,16 +1,56 @@
+:root {
+  font-family:
+    Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  color: #212529;
+  background: #f5f7fa;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  /* I keep shared design values as custom properties so the interface
+     can evolve without repeating the same colors and measurements. */
+  --color-background: #f5f7fa;
+  --color-surface: #ffffff;
+
+  --color-text: #212529;
+  --color-text-muted: #6c757d;
+
+  --color-border: #dee2e6;
+  --color-border-strong: #ced4da;
+
+  --color-primary: #0d6efd;
+  --color-primary-hover: #0b5ed7;
+
+  --color-danger: #dc3545;
+  --color-danger-hover: #bb2d3b;
+
+  --color-focus: rgb(13 110 253 / 0.25);
+
+  --radius-small: 0.375rem;
+  --radius-medium: 0.75rem;
+  --radius-large: 1rem;
+
+  --shadow-small: 0 2px 8px rgb(0 0 0 / 0.06);
+  --shadow-card: 0 12px 30px rgb(0 0 0 / 0.08);
+}
+
 * {
   box-sizing: border-box;
 }
 
 html {
-  font-family:
-    Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  min-width: 320px;
+  background: var(--color-background);
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+
+  color: var(--color-text);
+  background: var(--color-background);
 }
 
 button,
@@ -18,4 +58,10 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+/* I make pointer interaction explicit for buttons so clickable actions
+   provide the visual affordance users expect on desktop interfaces. */
+button {
+  cursor: pointer;
 }
