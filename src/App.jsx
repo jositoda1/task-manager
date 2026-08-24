@@ -41,20 +41,24 @@ function App() {
 
   return (
     <main className="app">
-      <h1>Task Manager</h1>
-      <p>Organize your tasks and stay productive.</p>
+      <header className="app-header">
+        <h1>Task Manager</h1>
+        <p>Organize your tasks and stay productive.</p>
+      </header>
 
-      <TaskForm onAddTask={handleAddTask} />
+      <section className="app-content">
+        <TaskForm onAddTask={handleAddTask} />
 
-      <p>
-        {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} added
-      </p>
+        <p className="task-count">
+          {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} added
+        </p>
 
-      <TaskList
-        tasks={tasks}
-        onToggleTask={handleToggleTask}
-        onDeleteTask={handleDeleteTask}
-      />
+        <TaskList
+          tasks={tasks}
+          onToggleTask={handleToggleTask}
+          onDeleteTask={handleDeleteTask}
+        />
+      </section>
     </main>
   )
 }

@@ -31,19 +31,26 @@ function TaskForm({ onAddTask }) {
     }
 
     return (
-        <form onSubmit={handleSubmit}>
-            <label htmlFor="task-title">Task</label>
+        <form className="task-form" onSubmit={handleSubmit}>
+            <label className="task-form__label" htmlFor="task-title">
+                Task
+            </label>
 
-            <input
-                id="task-title"
-                name="taskTitle"
-                type="text"
-                placeholder="What needs to be done?"
-                value={taskTitle}
-                onChange={handleTitleChange}
-            />
+            <div className="task-form__row">
+                <input
+                    className="form-control"
+                    id="task-title"
+                    name="taskTitle"
+                    type="text"
+                    placeholder="What needs to be done?"
+                    value={taskTitle}
+                    onChange={handleTitleChange}
+                />
 
-            <button type="submit">Add task</button>
+                <button className="button button--primary" type="submit">
+                    Add task
+                </button>
+            </div>
         </form>
     )
 }

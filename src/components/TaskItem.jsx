@@ -1,5 +1,3 @@
-// src/components/TaskItem.jsx
-
 function TaskItem({ task, onToggleTask, onDeleteTask }) {
     const handleToggle = () => {
         // I send only the task ID because App owns the task collection
@@ -14,20 +12,25 @@ function TaskItem({ task, onToggleTask, onDeleteTask }) {
     }
 
     return (
-        <li>
-            <label>
+        <li
+            className={`task-item${task.completed ? ' task-item--completed' : ''}`}
+        >
+            <label className="task-item__content">
                 <input
+                    className="task-item__checkbox"
                     type="checkbox"
                     checked={task.completed}
                     onChange={handleToggle}
                 />
 
-                <span>{task.title}</span>
+                <span className="task-item__title">{task.title}</span>
             </label>
 
             <button
+                className="button button--danger button--small"
                 type="button"
                 onClick={handleDelete}
+                aria-label={`Delete ${task.title}`}
             >
                 Delete
             </button>
