@@ -73,10 +73,16 @@ The project is currently under active development.
 - Visual styling for completed tasks
 - Responsive mobile layout
 - Task-specific accessible delete labels
+- Task editing
+- Temporary edit mode state inside `TaskItem`
+- Controlled edit input
+- Save and Cancel edit actions
+- Edited-title trimming and whitespace validation
+- Immutable title updates with `map()`
+- Integration-style task editing test
 
 ### Planned
 
-- Task editing
 - Task filtering
 - Local storage persistence
 - Automated deployment
@@ -157,7 +163,7 @@ I chose this separation because the task collection represents application-level
 
 I use callback props to communicate user actions from child components back to `App`.
 
-`TaskForm` receives `onAddTask`, while `TaskItem` receives `onToggleTask` and `onDeleteTask`.
+`TaskForm` receives `onAddTask`, while `TaskItem` receives `onToggleTask`, `onDeleteTask`, and `onEditTask`.
 
 For deletion, the flow is:
 
@@ -170,6 +176,20 @@ TaskItem
   ↑ task ID
 App
 ```
+
+For editing, the callback follows the same ownership boundary:
+
+```text
+App
+  ↓ onEditTask
+TaskList
+  ↓ onEditTask
+TaskItem
+  ↑ task ID + normalized title
+App
+```
+
+I chose to forward `onEditTask` through `TaskList` rather than moving task state into the list or item. `TaskList` remains responsible for rendering and forwarding actions, while `App` remains responsible for persistent application data.
 
 I chose this approach because React data flows down through props, while child components can report user-driven events upward through callback functions.
 
@@ -254,6 +274,20 @@ setTasks((currentTasks) =>
   currentTasks.filter((task) => task.id !== taskId),
 )
 ```
+
+For editing task titles:
+
+```js
+setTasks((currentTasks) =>
+  currentTasks.map((task) =>
+    task.id === taskId
+      ? { ...task, title: newTitle }
+      : task,
+  ),
+)
+```
+
+I chose `map()` for editing because one task changes while the remaining tasks should keep their existing values. Object spread preserves the task ID, completion state, and any future properties while replacing only the title.
 
 I chose this approach because each next collection depends on the current collection.
 
@@ -394,6 +428,160 @@ When the task collection is empty, `TaskList` displays a clear message instead o
 I chose to provide an explicit empty state because a blank area does not tell the user whether the interface is working or what action to take next.
 
 After the final task is deleted, the application naturally returns to this empty state because it is derived from the task collection.
+
+### Temporary Edit State
+
+I keep `isEditing` and `editTitle` inside `TaskItem`.
+
+These values represent temporary interface state rather than persistent application data.
+
+For example, while the user changes:
+
+```text
+Buy groceries
+```
+
+to an unfinished draft such as:
+
+```text
+Buy veget...
+```
+
+the application-level task should still be considered `Buy groceries` until the user explicitly saves the edit.
+
+I chose this separation because `App` should own the saved task title, while `TaskItem` can own the temporary editing experience.
+
+This avoids updating shared application state on every edit keystroke and keeps the distinction between a saved value and an unfinished draft clear.
+
+### Entering Edit Mode
+
+When editing starts, I copy the current saved task title into the local edit draft.
+
+```js
+setEditTitle(task.title)
+setIsEditing(true)
+```
+
+I deliberately reset the draft whenever Edit is selected.
+
+This ensures that reopening the editor always starts from the latest saved application state instead of from an abandoned local value.
+
+### Controlled Edit Input
+
+The edit field is a controlled React input.
+
+Its value comes from `editTitle`, and `onChange` updates that local state.
+
+I chose a controlled input for the same reason I use one in `TaskForm`: validation, resetting, and explicit interaction behavior are easier to reason about when React owns the current value.
+
+### Saving an Edited Task
+
+When the user selects Save, I normalize the draft with `trim()` before sending it to `App`.
+
+```js
+const trimmedTitle = editTitle.trim()
+```
+
+If the normalized value is valid, `TaskItem` reports:
+
+```js
+onEditTask(task.id, trimmedTitle)
+```
+
+I chose to send the task ID and new title rather than the entire modified task object.
+
+`TaskItem` knows which task the user is editing and what title they entered, while `App` remains responsible for deciding how the shared task collection changes.
+
+### Consistent Validation Between Create and Edit
+
+Task creation and task editing use the same whitespace rule.
+
+Both reject empty or whitespace-only titles after normalization with `trim()`.
+
+I chose to keep this rule consistent because the validity of a task title should not depend on whether the task is being created or edited.
+
+An existing valid task should not be replaceable with meaningless whitespace.
+
+### Keeping Edit Mode Open After Invalid Save
+
+When the user attempts to save a whitespace-only title, I do not close edit mode.
+
+I chose this behavior because leaving the editor open allows the user to correct the invalid value immediately.
+
+Closing the editor would hide the problem and make the correction workflow less clear.
+
+### Cancelling an Edit
+
+Cancel discards the unfinished draft and returns to the saved task title without calling `onEditTask`.
+
+I reset the local draft from `task.title` before leaving edit mode.
+
+I chose this behavior because Cancel should be non-destructive: temporary input is abandoned, while persistent application state remains untouched.
+
+### Immutable Title Updates
+
+`App` updates an edited title with `map()` and object spread:
+
+```js
+setTasks((currentTasks) =>
+  currentTasks.map((task) =>
+    task.id === taskId
+      ? { ...task, title: newTitle }
+      : task,
+  ),
+)
+```
+
+I chose this approach because editing changes one property of one task.
+
+Using:
+
+```js
+{ ...task, title: newTitle }
+```
+
+preserves the existing `id`, `completed` state, and any future task properties while replacing only the title.
+
+I deliberately avoid direct mutation such as:
+
+```js
+task.title = newTitle
+```
+
+because objects already stored in React state should be treated as immutable.
+
+### Secondary Action Styling
+
+Editing introduced supporting actions such as Edit and Cancel.
+
+I use a neutral secondary button variant for these actions so they remain visible without competing with the primary Add or Save actions or the destructive Delete action.
+
+This creates a clearer visual hierarchy:
+
+```text
+Primary
+  -> Add task
+  -> Save
+
+Secondary
+  -> Edit
+  -> Cancel
+
+Danger
+  -> Delete
+```
+
+I chose semantic button variants because visual priority should reflect the meaning and consequence of each action.
+
+### Grid and Flexbox in Edit Mode
+
+The edit layout continues the same Grid and Flexbox strategy used elsewhere in the project.
+
+The edit row uses Grid so the text input can consume the available width while the action group keeps the space it needs.
+
+The action group uses Flexbox because Save and Cancel need simple one-dimensional alignment and spacing.
+
+I chose to reuse the existing layout principles instead of introducing a different styling technique specifically for edit mode.
 
 ## Visual Design Decisions
 
@@ -786,6 +974,62 @@ I chose this integration-style test because the isolated `TaskItem` test only pr
 
 The `App` test proves that the complete deletion behavior works from the user's perspective.
 
+### Integration-style Editing Test
+
+I test editing through the complete `App` component in addition to the isolated `TaskItem` tests.
+
+The integration test creates a task, enters edit mode, changes the draft, saves it, verifies that the original title disappears, and verifies that the new title becomes visible.
+
+The flow is:
+
+```text
+User creates task
+  ↓
+TaskForm
+  ↓
+App stores task
+  ↓
+TaskList
+  ↓
+TaskItem enters edit mode
+  ↓
+User changes local edit draft
+  ↓
+Save
+  ↓
+onEditTask(task.id, newTitle)
+  ↓
+TaskList forwards callback
+  ↓
+App updates title with map()
+  ↓
+React renders updated task
+  ↓
+New title becomes visible
+```
+
+I chose this test because an isolated `TaskItem` test can prove that `onEditTask` is called correctly, but it cannot prove that the callback is actually connected through `TaskList` to `App`.
+
+During development, this distinction exposed a real integration bug: the isolated edit tests passed while the application could not save an edited title because `App` was not passing `onEditTask` to `TaskList`.
+
+The integration test failed with that wiring mistake and passed after the callback chain was completed.
+
+This is a useful example of why I keep both focused component tests and higher-level interaction tests.
+
+### Edit Component Tests
+
+The isolated `TaskItem` tests cover:
+
+- entering edit mode with the current saved title
+- submitting a normalized edited title
+- leaving edit mode after a valid save
+- rejecting whitespace-only edited titles
+- remaining in edit mode after invalid input
+- cancelling without calling the application callback
+- restoring the saved task after cancellation
+
+I chose these tests because they describe the local editing contract independently from the application-level state implementation.
+
 ### Test Isolation
 
 I explicitly clean up the rendered DOM after every test.
@@ -865,6 +1109,8 @@ Squash merging keeps the history of `main` focused on completed features rather 
 
 ## Testing
 
+The current suite contains 20 automated tests covering component behavior and application-level interaction flows.
+
 Run the complete test suite with:
 
 ```bash
@@ -932,6 +1178,14 @@ Through this project, I am actively practicing:
 - Visual state communication
 - Accessible repeated actions
 - Separation of presentation and application logic
+- Temporary UI state versus persistent application state
+- Edit-mode state
+- Controlled edit inputs
+- Save and Cancel interaction patterns
+- Consistent validation across create and edit flows
+- Callback wiring across multiple component levels
+- Immutable property updates with object spread
+- Unit tests versus integration tests for component wiring
 - CSS comments that document design intent
 - Component testing
 - Mock functions
