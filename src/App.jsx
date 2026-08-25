@@ -3,7 +3,7 @@ import './App.css'
 import TaskForm from './components/TaskForm'
 import TaskList from './components/TaskList'
 import TaskFilters from './components/TaskFilters'
-
+import TaskSummary from './components/TaskSummary'
 
 function App() {
 
@@ -89,7 +89,13 @@ function App() {
       ),
     )
   }
-
+  const handleClearCompleted = () => {
+    // I derive a new collection containing only active tasks instead of
+    // mutating the existing array or deleting completed tasks individually.
+    setTasks((currentTasks) =>
+      currentTasks.filter((task) => !task.completed),
+    )
+  }
   // I derive the visible collection from the source task state and the
   // selected filter instead of storing a duplicated filtered task list.
   const visibleTasks = tasks.filter((task) => {
@@ -103,6 +109,13 @@ function App() {
 
     return true
   })
+
+
+  // I derive task counts from the source collection instead of storing them
+  // separately because they can always be calculated from the current tasks.
+  const activeCount = tasks.filter((task) => !task.completed).length
+
+  const completedCount = tasks.filter((task) => task.completed).length
   return (
     <main className="app">
       <header className="app-header">
@@ -116,6 +129,13 @@ function App() {
         <p className="task-count">
           {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} added
         </p>
+
+        <TaskSummary
+          activeCount={activeCount}
+          completedCount={completedCount}
+          onClearCompleted={handleClearCompleted}
+        />
+
         <TaskFilters
           activeFilter={filter}
           onFilterChange={setFilter}
