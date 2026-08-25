@@ -1,12 +1,49 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 import TaskForm from './components/TaskForm'
 import TaskList from './components/TaskList'
 import TaskFilters from './components/TaskFilters'
 
+
 function App() {
-  const [tasks, setTasks] = useState([])
+
+  const TASKS_STORAGE_KEY = 'task-manager-tasks'
+
+  const [tasks, setTasks] = useState(() => {
+    const storedTasks = localStorage.getItem(TASKS_STORAGE_KEY)
+
+    // I return an empty collection when storage has no saved value because
+    // a first-time user should start with a valid application state.
+    if (!storedTasks) {
+      return []
+    }
+
+    try {
+      const parsedTasks = JSON.parse(storedTasks)
+
+      // I validate the parsed structure because valid JSON is not necessarily
+      // a valid task collection for this application.
+      return Array.isArray(parsedTasks) ? parsedTasks : []
+    } catch {
+      // I recover from malformed persisted data instead of allowing corrupted
+      // browser storage to prevent the application from rendering.
+      return []
+    }
+  })
+
+
+
+
   const [filter, setFilter] = useState('all')
+
+  useEffect(() => {
+    // I synchronize the task collection with browser storage whenever tasks
+    // change because localStorage is an external system outside React state.
+    localStorage.setItem(
+      TASKS_STORAGE_KEY,
+      JSON.stringify(tasks),
+    )
+  }, [tasks])
 
   const handleAddTask = (taskTitle) => {
     const newTask = {
