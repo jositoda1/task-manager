@@ -93,6 +93,13 @@ The project is currently under active development.
 - Defensive recovery from malformed stored JSON
 - Validation that stored data is a task collection
 - Persistence tests for add, complete, edit, and delete flows
+- Task summary with active and completed counts
+- Dedicated `TaskSummary` component
+- Derived active and completed task counts
+- `Clear completed` bulk action
+- Disabled clear action when no completed tasks exist
+- Persisted clearing of completed tasks
+- Responsive task summary layout
 
 ### Planned
 
@@ -1049,6 +1056,105 @@ I chose this because task data represents user-created application content, whil
 
 This keeps persisted data focused on information that would be frustrating to lose after a reload.
 
+### Dedicated TaskSummary Component
+
+I introduced a dedicated `TaskSummary` component to display active and completed task counts and expose the `Clear completed` action.
+
+I chose a separate component because summary information and bulk actions form a distinct interface responsibility. `TaskSummary` does not own task state; it receives derived counts and a callback from `App`.
+
+### Derived Active and Completed Counts
+
+I calculate the summary values directly from the task collection:
+
+```js
+const activeCount = tasks.filter((task) => !task.completed).length
+const completedCount = tasks.filter((task) => task.completed).length
+```
+
+I deliberately do not store these values in separate React state because they can always be derived from `tasks`. This keeps the task collection as the single source of truth and avoids synchronization bugs.
+
+### Bulk Clear Completed Action
+
+The `Clear completed` action removes completed tasks with one immutable transformation:
+
+```js
+setTasks((currentTasks) =>
+  currentTasks.filter((task) => !task.completed),
+)
+```
+
+I chose `filter()` because the operation naturally means keeping active tasks and excluding completed ones. This avoids mutating the existing array and avoids deleting items one by one.
+
+### Why Clear Completed Lives in App
+
+`TaskSummary` reports the user action through `onClearCompleted`, while `App` performs the collection update.
+
+I chose this ownership boundary because `App` already owns the shared task collection. The summary component stays focused on presentation and interaction rather than application-state mutation.
+
+### Automatic Persistence of Bulk Clearing
+
+`handleClearCompleted` does not write directly to `localStorage`. It updates `tasks`, and the existing persistence effect stores the new collection:
+
+```text
+Clear completed
+      ↓
+setTasks()
+      ↓
+tasks changes
+      ↓
+useEffect
+      ↓
+localStorage updates
+```
+
+I chose this because persistence is already centralized around the task collection. Repeating storage writes inside the bulk action would duplicate logic and increase maintenance risk.
+
+### Disabled Clear Action
+
+The button uses:
+
+```jsx
+disabled={completedCount === 0}
+```
+
+I chose the native disabled state because the action has no meaningful result when there are no completed tasks. This communicates the unavailable state both behaviorally and semantically instead of relying on styling alone.
+
+### Singular and Plural Summary Labels
+
+The summary adapts its labels to the count:
+
+```text
+1 active task
+2 active tasks
+
+1 completed task
+2 completed tasks
+```
+
+I chose this small presentation rule because status text should read naturally to the user.
+
+### Summary Versus Total Task Count
+
+The interface currently shows both the total task count and the active/completed breakdown.
+
+The total count answers how many tasks exist, while the summary explains how those tasks are distributed by completion state. I keep both for now because they communicate different information and can be revisited later as a product-design decision.
+
+### Flexbox for Task Summary Layout
+
+The summary uses Flexbox because it contains two main one-dimensional groups: counts and the related action.
+
+```text
+counts <----------------> action
+```
+
+I chose Flexbox rather than Grid because the primary requirement is horizontal alignment and spacing.
+
+### Responsive Task Summary Layout
+
+On narrower screens, the summary changes from horizontal to vertical layout and the action can use the available width.
+
+I chose CSS for this behavior because it is purely presentational and does not require JavaScript-driven layout state.
+
 ## Visual Design Decisions
 
 ### Styling After Core Behavior
@@ -1691,6 +1797,49 @@ I chose a separate test because malformed JSON and valid-but-unusable JSON are d
 
 Testing both documents the difference between parsing successfully and validating the expected data structure.
 
+### TaskSummary Component Tests
+
+The isolated `TaskSummary` tests verify three responsibilities:
+
+- active and completed counts are rendered
+- `Clear completed` is disabled when there are no completed tasks
+- clicking the enabled action reports the clear request to the parent
+
+I chose these tests because they define the component contract independently from the application-level state mutation.
+
+### Clear Completed Integration Test
+
+I test the bulk clear operation through the complete `App` component.
+
+The test creates one active task and one completed task, verifies the derived summary, selects `Clear completed`, and verifies that the completed task disappears, the active task remains, the counts update, and the clear action becomes disabled.
+
+This covers the full flow:
+
+```text
+TaskSummary
+   ↓ callback
+App
+   ↓ immutable task update
+derived counts
+   ↓
+TaskSummary re-renders
+TaskList re-renders
+```
+
+### Persistence After Clear Completed
+
+The integration test also verifies the `localStorage` result after clearing completed tasks.
+
+I chose to test this boundary because a completed task removed only from React state but left in storage would return after a page reload. This also proves that the centralized persistence effect automatically supports a newly introduced bulk mutation.
+
+### Duplicate Markup Caught by Existing Tests
+
+During integration, the total task-count paragraph was accidentally rendered twice.
+
+Existing tests failed because `getByText()` found multiple identical count elements. I fixed the duplicated markup instead of changing the tests to a plural query such as `getAllByText()`.
+
+I chose this because the interface was supposed to render one total count. Making the test more permissive would have hidden a real UI defect.
+
 ### Test Isolation
 
 I explicitly clean up the rendered DOM after every test.
@@ -1770,16 +1919,17 @@ Squash merging keeps the history of `main` focused on completed features rather 
 
 ## Testing
 
-The current suite contains 28 automated tests covering component behavior and application-level interaction flows.
+The current suite contains 32 automated tests covering component behavior and application-level interaction flows.
 
 | Test area | Tests |
 | --- | ---: |
 | `TaskForm` | 5 |
 | `TaskFilters` | 2 |
+| `TaskSummary` | 3 |
 | `TaskList` | 2 |
 | `TaskItem` | 8 |
-| `App` integration behavior | 11 |
-| **Total** | **28** |
+| `App` integration behavior | 12 |
+| **Total** | **32** |
 
 Run the complete test suite with:
 
@@ -1877,6 +2027,14 @@ Through this project, I am actively practicing:
 - Test isolation for persistent browser state
 - Using `waitFor()` for effect-driven synchronization tests
 - Testing persistence across create, complete, edit, and delete flows
+- Derived summary values from source state
+- Bulk immutable collection updates
+- Designing disabled actions with native semantics
+- Separating bulk-action presentation from state ownership
+- Reusing centralized persistence for new mutations
+- Singular and plural user-facing labels
+- Responsive summary layouts with Flexbox
+- Recognizing when a failing test exposes duplicate UI markup
 - CSS comments that document design intent
 - Component testing
 - Mock functions
