@@ -415,4 +415,74 @@ describe('App', () => {
             screen.getByText(/no tasks yet/i),
         ).toBeInTheDocument()
     })
+    it('clears all completed tasks while keeping active tasks', async () => {
+        const user = userEvent.setup()
+
+        render(<App />)
+
+        const taskInput = screen.getByRole('textbox', {
+            name: /task/i,
+        })
+
+        const addButton = screen.getByRole('button', {
+            name: /add task/i,
+        })
+
+        await user.type(taskInput, 'Active task')
+        await user.click(addButton)
+
+        await user.type(taskInput, 'Completed task')
+        await user.click(addButton)
+
+        await user.click(
+            screen.getByRole('checkbox', {
+                name: /completed task/i,
+            }),
+        )
+
+        expect(screen.getByText(/1 active task/i)).toBeInTheDocument()
+        expect(screen.getByText(/1 completed task/i)).toBeInTheDocument()
+
+        await user.click(
+            screen.getByRole('button', {
+                name: /^clear completed$/i,
+            }),
+        )
+
+        // I verify the resulting collection through visible behavior because
+        // clearing should remove completed tasks while preserving active tasks.
+        expect(screen.getByText('Active task')).toBeInTheDocument()
+
+        expect(
+            screen.queryByText('Completed task'),
+        ).not.toBeInTheDocument()
+
+        expect(screen.getByText(/1 active task/i)).toBeInTheDocument()
+        expect(screen.getByText(/0 completed tasks/i)).toBeInTheDocument()
+
+        // I also verify that the action becomes unavailable when there is
+        // nothing left to clear.
+        expect(
+            screen.getByRole('button', {
+                name: /^clear completed$/i,
+            }),
+        ).toBeDisabled()
+
+        // I also verify the persistence boundary because cleared completed tasks
+        // should not return after the application is reloaded.
+        await waitFor(() => {
+            const storedTasks = JSON.parse(
+                localStorage.getItem('task-manager-tasks'),
+            )
+
+            expect(storedTasks).toHaveLength(1)
+
+            expect(storedTasks[0]).toMatchObject({
+                title: 'Active task',
+                completed: false,
+            })
+        })
+    })
+
+
 })
