@@ -24,6 +24,14 @@ I am building this project incrementally as part of my frontend development port
 
 Rather than building the entire application at once, I am developing it feature by feature. This allows me to understand each decision, validate each change, and keep the project maintainable as it grows.
 
+## Live Demo
+
+The application is publicly available at:
+
+**https://jositoda1.github.io/task-manager/**
+
+I deploy the production build automatically with GitHub Actions and GitHub Pages. The public endpoint has been verified with an HTTP `200` response after deployment.
+
 ## Current Status
 
 The project is currently under active development.
@@ -100,10 +108,17 @@ The project is currently under active development.
 - Disabled clear action when no completed tasks exist
 - Persisted clearing of completed tasks
 - Responsive task summary layout
+- Production deployment to GitHub Pages
+- Automated deployment through GitHub Actions
+- Vite repository base-path configuration
+- Separate build and deploy jobs
+- Production `dist` artifact publishing
+- Manual deployment support with `workflow_dispatch`
+- Public deployment verification with HTTP status checking
 
 ### Planned
 
-- Automated deployment
+- Further portfolio projects and backend-focused work
 
 ## Tech Stack
 
@@ -120,6 +135,7 @@ The project is currently under active development.
 - Git
 - GitHub
 - GitHub Actions
+- GitHub Pages
 
 ## Engineering Decisions
 
@@ -1155,6 +1171,347 @@ On narrower screens, the summary changes from horizontal to vertical layout and 
 
 I chose CSS for this behavior because it is purely presentational and does not require JavaScript-driven layout state.
 
+## Deployment and CI/CD Decisions
+
+### GitHub Pages as the Current Production Target
+
+I deploy the application to:
+
+```text
+https://jositoda1.github.io/task-manager/
+```
+
+I chose GitHub Pages because the current application is a client-side React application that Vite compiles into static assets.
+
+At this stage, the project does not require a production Node.js server, PHP runtime, database, server-side rendering, or backend API. A static hosting platform is therefore an appropriate and intentionally simple production target.
+
+I would reassess the hosting architecture if the project later gained backend requirements rather than forcing server-side needs into a static hosting platform.
+
+### Vite Base Path for a Project Site
+
+The repository is named:
+
+```text
+task-manager
+```
+
+A GitHub Pages project site is served below the repository path instead of directly from the account domain root.
+
+The application therefore needs production assets below:
+
+```text
+/task-manager/
+```
+
+I configure Vite with:
+
+```js
+export default defineConfig({
+  base: '/task-manager/',
+  plugins: [react()],
+})
+```
+
+I chose an explicit base path because Vite must generate URLs that match the actual hosting location.
+
+Without it, a build could reference:
+
+```text
+/assets/index.js
+/assets/index.css
+```
+
+while the deployed project expects:
+
+```text
+/task-manager/assets/index.js
+/task-manager/assets/index.css
+```
+
+That mismatch can allow the HTML document to load while JavaScript and CSS return `404` responses.
+
+### Verifying the Generated Build
+
+I verify the production configuration by inspecting `dist/index.html` after `npm run build`.
+
+The generated document contains asset paths such as:
+
+```html
+<script type="module" src="/task-manager/assets/..."></script>
+<link rel="stylesheet" href="/task-manager/assets/...">
+```
+
+I also use Vite preview locally, where the production build is served below:
+
+```text
+http://localhost:4173/task-manager/
+```
+
+I chose to inspect generated output instead of assuming that a configuration value is correct just because the source file looks correct.
+
+### Deployment Workflow Trigger
+
+The deployment workflow runs on pushes to `main`:
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+```
+
+I deliberately do not deploy the production site from feature or CI branches.
+
+My delivery flow is:
+
+```text
+feature or CI branch
+      ↓
+pull request
+      ↓
+CI validation
+      ↓
+squash merge
+      ↓
+main
+      ↓
+deployment workflow
+```
+
+A pull request represents a proposed change, while `main` represents the accepted production state.
+
+### Manual Deployment Support
+
+I also enable:
+
+```yaml
+workflow_dispatch:
+```
+
+This gives me an operational fallback for rerunning a deployment without creating an artificial source-code change just to trigger the workflow.
+
+The normal path is still automatic deployment after a successful merge into `main`.
+
+### Explicit Deployment Permissions
+
+The workflow declares:
+
+```yaml
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+```
+
+I keep repository-content access read-only because the workflow only needs to check out and build the application.
+
+`pages: write` allows the workflow to publish the Pages deployment, and `id-token: write` supports the identity flow required by the deployment action.
+
+I prefer explicit limited permissions over broad repository write access.
+
+### Separate Build and Deploy Jobs
+
+The Pages workflow is divided into two jobs:
+
+```text
+build
+  ↓
+deploy
+```
+
+The deployment job uses:
+
+```yaml
+needs: build
+```
+
+I chose this structure because building and publishing are different responsibilities.
+
+The build job validates and prepares the application. The deploy job only runs after the build job succeeds.
+
+This prevents publishing after a failed validation or build stage and keeps the workflow easier to reason about.
+
+### Deployment Build Quality Gates
+
+The build job runs:
+
+```text
+npm ci
+npm test
+npm run lint
+npm run build
+```
+
+I intentionally repeat these checks in the deployment workflow even though pull requests already use CI.
+
+This makes the deployment workflow independently safe when it is started through `workflow_dispatch`, rather than assuming another workflow has already validated the same state.
+
+### Why I Use npm ci in Automation
+
+I use:
+
+```text
+npm ci
+```
+
+instead of `npm install` in CI/CD because `npm ci` installs from the committed lockfile in a clean and reproducible way.
+
+This reduces the risk of a deployment being built with dependency versions that differ from the versions represented by the repository.
+
+### Production Artifact
+
+Vite creates the production application inside:
+
+```text
+dist/
+```
+
+The workflow uploads only:
+
+```yaml
+with:
+  path: ./dist
+```
+
+I chose to publish the production artifact rather than the complete repository.
+
+The deployed result contains the optimized HTML, CSS, JavaScript, and public assets generated by Vite. Tests, source files, development configuration, and `node_modules` are not the deployment artifact.
+
+### GitHub Pages Artifact Flow
+
+The workflow uses the Pages-specific handoff:
+
+```text
+configure GitHub Pages
+      ↓
+upload dist artifact
+      ↓
+deploy artifact
+```
+
+This makes the boundary between application build and hosting explicit.
+
+### GitHub Pages Environment
+
+The deploy job targets:
+
+```yaml
+environment:
+  name: github-pages
+```
+
+and exposes the deployment URL from the deployment step output.
+
+I use the dedicated environment because a production deployment is an operational concern that should be visible separately from ordinary CI execution.
+
+### Concurrency Control
+
+The workflow defines a GitHub Pages concurrency group and cancels an older in-progress deployment when a newer one becomes the relevant deployment.
+
+I chose this because the newest accepted `main` state is the version that should ultimately be published.
+
+### CI Versus CD
+
+I treat continuous integration and continuous delivery/deployment as related but distinct concerns.
+
+The CI workflow answers:
+
+```text
+Is this change safe to integrate?
+```
+
+It runs:
+
+```text
+npm ci
+npm run lint
+npm test
+npm run build
+```
+
+The deployment workflow answers:
+
+```text
+Can the accepted version be built and delivered automatically?
+```
+
+Its production path is:
+
+```text
+main
+  ↓
+validate
+  ↓
+build
+  ↓
+create Pages artifact
+  ↓
+deploy
+```
+
+Keeping CI and CD conceptually separate makes the repository easier to understand and prepares the project for more advanced delivery tooling later.
+
+### Deployment Verification
+
+After the first automated deployment, I verify the Pages configuration and obtain the published URL through the GitHub API.
+
+I also request the live page directly and confirm an HTTP:
+
+```text
+200
+```
+
+response.
+
+I prefer verifying the actual public endpoint rather than treating a green workflow as the only evidence that the application is reachable.
+
+### Current End-to-End Delivery Architecture
+
+The current development and delivery path is:
+
+```text
+local development
+      ↓
+dedicated branch
+      ↓
+local tests + lint + build
+      ↓
+commit
+      ↓
+push
+      ↓
+pull request
+      ↓
+GitHub Actions CI
+      ↓
+squash merge
+      ↓
+main
+      ↓
+GitHub Actions Pages workflow
+      ↓
+production build
+      ↓
+dist artifact
+      ↓
+GitHub Pages deployment
+      ↓
+public application
+```
+
+This gives the project an automated path from local development through validation to a publicly accessible production build.
+
+### Current Hosting Tradeoffs
+
+GitHub Pages is a strong fit for this frontend-only stage because it is simple, public, and works naturally with static Vite output.
+
+Its limitation is equally important: it is not a runtime for backend Node.js applications, PHP, WordPress, private APIs, database-backed authentication, or other server-side workloads.
+
+I consider that a useful architectural boundary rather than a problem. When a future project needs server-side behavior, I will choose infrastructure designed for that workload.
+
+
 ## Visual Design Decisions
 
 ### Styling After Core Behavior
@@ -1873,6 +2230,36 @@ I chose `npm ci` instead of `npm install` in CI because it installs dependencies
 
 I chose this pipeline so every pull request is validated before being integrated into `main`.
 
+### Continuous Deployment
+
+I configured a second GitHub Actions workflow to deploy the accepted `main` branch to GitHub Pages.
+
+The deployment path is:
+
+```text
+main push
+  ↓
+npm ci
+  ↓
+tests
+  ↓
+lint
+  ↓
+production build
+  ↓
+Pages artifact
+  ↓
+deploy
+```
+
+I keep this workflow separate from pull-request CI because validation and production delivery have different triggers and permissions.
+
+The public application is available at:
+
+```text
+https://jositoda1.github.io/task-manager/
+```
+
 ## Development Workflow
 
 For each feature, I work on a dedicated Git branch and integrate changes through a pull request.
@@ -1898,13 +2285,17 @@ Push
   ↓
 Pull Request
   ↓
-GitHub Actions
+GitHub Actions CI
   ↓
 Code review
   ↓
 Squash merge
   ↓
 main
+  ↓
+GitHub Actions deployment
+  ↓
+GitHub Pages
 ```
 
 I chose this workflow because it gives me experience with a development process similar to the one commonly used in collaborative software projects.
@@ -1920,6 +2311,39 @@ Squash merging keeps the history of `main` focused on completed features rather 
 ## Testing
 
 The current suite contains 32 automated tests covering component behavior and application-level interaction flows.
+
+### Deployment Validation
+
+The deployment work does not increase the React test count because it changes delivery infrastructure rather than application behavior.
+
+Before committing the deployment workflow, I still run the complete local quality gate:
+
+```text
+npm test
+npm run lint
+npm run build
+```
+
+The application remains at 32 passing automated tests.
+
+I then validate the hosting-specific behavior by inspecting the generated Vite asset paths, previewing the production build below the repository subpath, confirming the GitHub Pages workflow succeeds after merge, and verifying the public endpoint returns HTTP `200`.
+
+This gives me several independent validation layers:
+
+```text
+automated application tests
+      ↓
+lint
+      ↓
+production build
+      ↓
+generated asset-path inspection
+      ↓
+GitHub Pages workflow
+      ↓
+public endpoint verification
+```
+
 
 | Test area | Tests |
 | --- | ---: |
@@ -2035,6 +2459,18 @@ Through this project, I am actively practicing:
 - Singular and plural user-facing labels
 - Responsive summary layouts with Flexbox
 - Recognizing when a failing test exposes duplicate UI markup
+- Static production deployment with GitHub Pages
+- Vite base paths for repository-hosted applications
+- Inspecting generated build output before deployment
+- Continuous integration versus continuous deployment
+- Deployment workflows with dependent jobs
+- Publishing production artifacts rather than source repositories
+- Minimal GitHub Actions deployment permissions
+- Manual workflow dispatch as an operational fallback
+- GitHub Pages environments
+- Deployment concurrency control
+- Verifying a public production endpoint after deployment
+- Static-hosting tradeoffs and backend limitations
 - CSS comments that document design intent
 - Component testing
 - Mock functions
