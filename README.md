@@ -86,10 +86,16 @@ The project is currently under active development.
 - Derived visible task collection without duplicated state
 - Exact accessible-name queries for filter controls
 - Integration-style filtering test
+- Task persistence with `localStorage`
+- Lazy initialization of task state from browser storage
+- Automatic synchronization of task changes to storage with `useEffect`
+- JSON serialization and deserialization
+- Defensive recovery from malformed stored JSON
+- Validation that stored data is a task collection
+- Persistence tests for add, complete, edit, and delete flows
 
 ### Planned
 
-- Local storage persistence
 - Automated deployment
 
 ## Tech Stack
@@ -776,6 +782,273 @@ I chose Flexbox instead of Grid here because the layout is primarily one-dimensi
 
 This follows the same layout principle used throughout the application: Grid for structural two-dimensional relationships and Flexbox for aligned component groups.
 
+### Browser Persistence with localStorage
+
+I use the browser Web Storage API to persist the task collection between page reloads.
+
+I chose `localStorage` because this project is currently a client-side application without a backend, and the data is small, user-specific to the current browser, and suitable for simple local persistence.
+
+This gives the application realistic persistence behavior without introducing a server before the frontend architecture is ready for that next step.
+
+I deliberately do not use `sessionStorage` because task data should survive browser tab and browser-session restarts.
+
+I also do not introduce IndexedDB at this stage because the task collection is small and does not require indexed queries, transactions, or large structured datasets.
+
+### Stable Storage Key
+
+The application uses a dedicated constant:
+
+```js
+const TASKS_STORAGE_KEY = 'task-manager-tasks'
+```
+
+I keep this outside the component because it is configuration rather than render-specific state.
+
+Using one named constant also avoids repeating a storage key string throughout application code.
+
+### Lazy State Initialization
+
+The task state is initialized with a function:
+
+```js
+const [tasks, setTasks] = useState(() => {
+  // read localStorage
+})
+```
+
+I chose lazy initialization because reading and parsing browser storage is only necessary when the task state is created.
+
+If I placed the storage read directly in the component body, it would run on every render even though subsequent renders should use React state as the source of truth.
+
+Lazy initialization keeps the storage read tied to state initialization rather than normal rendering.
+
+### Empty Storage Fallback
+
+When no saved task collection exists, the initializer returns:
+
+```js
+[]
+```
+
+I chose an empty array as the fallback because it is already the valid default shape expected by the rest of the application.
+
+This allows first-time users and users with cleared browser storage to start in a normal empty state without special rendering logic.
+
+### JSON Serialization
+
+`localStorage` stores string values, while the application uses an array of task objects.
+
+I serialize the task collection with:
+
+```js
+JSON.stringify(tasks)
+```
+
+and restore it with:
+
+```js
+JSON.parse(storedTasks)
+```
+
+The conversion flow is:
+
+```text
+JavaScript task array
+      ↓
+JSON.stringify()
+      ↓
+string in localStorage
+      ↓
+JSON.parse()
+      ↓
+JavaScript task array
+```
+
+I chose JSON because the current task model contains serializable primitive values and does not require custom encoding.
+
+### useEffect for External Synchronization
+
+I synchronize task changes with browser storage using:
+
+```js
+useEffect(() => {
+  localStorage.setItem(
+    TASKS_STORAGE_KEY,
+    JSON.stringify(tasks),
+  )
+}, [tasks])
+```
+
+I chose `useEffect` here because `localStorage` is an external browser system outside React state.
+
+This is different from task filtering.
+
+Filtering is derived data that can be calculated directly during rendering, so I intentionally avoided `useEffect` there.
+
+Persistence is a side effect: React state changes and an external system must be updated to reflect that change.
+
+This distinction keeps effects reserved for synchronization rather than using them for calculations that belong in render logic.
+
+### Narrow Effect Dependency
+
+The persistence effect depends only on:
+
+```js
+[tasks]
+```
+
+I chose this dependency because only changes to the task collection need to be persisted.
+
+Changing the selected filter should not rewrite task storage because the filter is temporary interface state and is not part of the persisted task data.
+
+A narrow dependency list makes the synchronization rule explicit.
+
+### Centralized Persistence
+
+I do not write to `localStorage` separately inside every task handler.
+
+I avoid code such as:
+
+```text
+handleAddTask
+  -> update React state
+  -> update localStorage
+
+handleToggleTask
+  -> update React state
+  -> update localStorage
+
+handleEditTask
+  -> update React state
+  -> update localStorage
+
+handleDeleteTask
+  -> update React state
+  -> update localStorage
+```
+
+Instead, every handler updates React state, and one effect synchronizes the resulting collection:
+
+```text
+user action
+   ↓
+task handler
+   ↓
+setTasks()
+   ↓
+tasks changes
+   ↓
+useEffect
+   ↓
+localStorage
+```
+
+I chose this architecture because it keeps React state as the single source of truth and centralizes the persistence boundary.
+
+It also reduces duplication and lowers the risk that a future task mutation forgets to update browser storage.
+
+### Preserving Task Identity During Persistence
+
+The persistence tests verify that completing and editing a task preserve the same stored task ID.
+
+This matters because completion and editing should change properties of an existing task, not create a new logical entity.
+
+The sequence remains:
+
+```text
+Add
+  ↓
+same task ID
+  ↓
+Complete
+  ↓
+same task ID
+  ↓
+Edit
+  ↓
+same task ID
+```
+
+The existing immutable update strategy naturally supports this because task updates copy the existing task object and preserve its ID.
+
+### Persistent Deletion
+
+When a task is deleted, React state becomes a collection without that task.
+
+The persistence effect then stores the new collection.
+
+I verify that storage becomes:
+
+```json
+[]
+```
+
+when the last task is deleted.
+
+I chose to test deletion at the storage boundary because a task removed only from the current React render but left in storage would reappear after a page reload.
+
+### Defensive JSON Parsing
+
+Stored browser data cannot be assumed to be valid forever.
+
+The initializer therefore protects `JSON.parse()` with `try/catch`.
+
+If malformed JSON is present, the application recovers to:
+
+```js
+[]
+```
+
+instead of failing to render.
+
+I chose this defensive behavior because persistent browser storage can be manually edited, left behind by older application versions, or otherwise corrupted.
+
+A recoverable local storage problem should not prevent the entire interface from loading.
+
+### Valid JSON Is Not Necessarily Valid Application Data
+
+Successful `JSON.parse()` only proves that the stored text is syntactically valid JSON.
+
+For example:
+
+```json
+{
+  "unexpected": "value"
+}
+```
+
+is valid JSON but is not a task collection.
+
+After parsing, I verify:
+
+```js
+Array.isArray(parsedTasks)
+```
+
+and fall back to an empty collection when the value is not an array.
+
+I chose this extra structural validation because syntax validity and application-level data validity are different concerns.
+
+### Why I Do Not Fully Validate Every Task Object Yet
+
+The current implementation validates that persisted data is an array, but it does not yet perform schema-level validation of every task object.
+
+For example, it does not currently verify every stored item has a string `id`, string `title`, and boolean `completed`.
+
+I chose not to introduce a complete validation layer yet because the data model is still small and the project has not introduced a validation library or backend contract.
+
+The current validation protects the application from the most immediate malformed-storage failures while leaving room for stronger schema validation when the data model becomes more complex.
+
+### Persistence Scope
+
+Only the task collection is persisted.
+
+The selected filter is intentionally not stored.
+
+I chose this because task data represents user-created application content, while the filter is a temporary view preference in the current product design.
+
+This keeps persisted data focused on information that would be frustrating to lose after a reload.
+
 ## Visual Design Decisions
 
 ### Styling After Core Behavior
@@ -1315,6 +1588,109 @@ I corrected the test sequence rather than changing working application code.
 
 This reinforced an important testing principle: a failing test is evidence that something disagrees with the expectation, but the failure must still be diagnosed before deciding whether the product code or the test is incorrect.
 
+### localStorage Test Isolation
+
+The test suite clears browser storage before every `App` test:
+
+```js
+beforeEach(() => {
+  localStorage.clear()
+})
+```
+
+I chose this because `localStorage` persists values within the test environment unless explicitly cleared.
+
+Without isolation, one test could accidentally depend on data created by another test, making results sensitive to test order.
+
+Each test should establish its own persistence state.
+
+### Loading Persisted Tasks Test
+
+I seed `localStorage` before rendering `App` and verify that the saved task appears in the interface.
+
+I verify the result through visible application behavior rather than reading React state directly.
+
+This proves that the initialization boundary works from browser storage through React rendering.
+
+### Saving Tasks Test
+
+I create a task through the interface and then read the stored collection back through the Web Storage API.
+
+I use `waitFor()` because persistence happens through an effect after the React state update.
+
+The test does not assume the exact scheduling moment of that effect. It waits for the observable storage state to become correct.
+
+### Partial Object Matching for Generated IDs
+
+New task IDs are generated dynamically with `crypto.randomUUID()`.
+
+For the basic storage-write test, I use `toMatchObject()` for the properties relevant to that test:
+
+```js
+expect(storedTasks[0]).toMatchObject({
+  title: 'Persisted task',
+  completed: false,
+})
+```
+
+I chose partial matching because the exact UUID value is not part of this test's responsibility.
+
+The test should prove persistence of task data without becoming coupled to an unpredictable identifier value.
+
+### Persistence Lifecycle Integration Test
+
+I test a complete persisted task lifecycle:
+
+```text
+Add
+  ↓
+Complete
+  ↓
+Edit
+  ↓
+Delete
+```
+
+After each meaningful change, I read `localStorage` and verify that the stored collection matches the application state.
+
+The test also captures the generated ID after creation and confirms that completion and editing preserve that same identity.
+
+I chose one lifecycle-oriented integration test because all of these operations share one persistence mechanism: they update `tasks`, and the persistence effect synchronizes the resulting collection.
+
+This proves that persistence is centralized rather than accidentally working only for task creation.
+
+### Invalid JSON Recovery Test
+
+I intentionally place malformed data in storage:
+
+```text
+{invalid-json
+```
+
+and render the application.
+
+I verify that the UI still loads in a valid empty state.
+
+I chose this test because browser persistence should not become a single point of failure for application startup.
+
+### Invalid Stored Shape Test
+
+I also store syntactically valid JSON that is not a task collection.
+
+For example:
+
+```json
+{
+  "unexpected": "value"
+}
+```
+
+The application ignores that value and starts from an empty task collection.
+
+I chose a separate test because malformed JSON and valid-but-unusable JSON are different failure modes.
+
+Testing both documents the difference between parsing successfully and validating the expected data structure.
+
 ### Test Isolation
 
 I explicitly clean up the rendered DOM after every test.
@@ -1394,7 +1770,7 @@ Squash merging keeps the history of `main` focused on completed features rather 
 
 ## Testing
 
-The current suite contains 23 automated tests covering component behavior and application-level interaction flows.
+The current suite contains 28 automated tests covering component behavior and application-level interaction flows.
 
 | Test area | Tests |
 | --- | ---: |
@@ -1402,8 +1778,8 @@ The current suite contains 23 automated tests covering component behavior and ap
 | `TaskFilters` | 2 |
 | `TaskList` | 2 |
 | `TaskItem` | 8 |
-| `App` integration behavior | 6 |
-| **Total** | **23** |
+| `App` integration behavior | 11 |
+| **Total** | **28** |
 
 Run the complete test suite with:
 
@@ -1489,6 +1865,18 @@ Through this project, I am actively practicing:
 - Diagnosing whether a failing test or application behavior is incorrect
 - Flexbox for compact control groups
 - View-level filtering without mutating source data
+- Browser persistence with `localStorage`
+- Lazy state initialization
+- JSON serialization and deserialization
+- Using `useEffect` for external synchronization
+- Choosing narrow effect dependencies
+- Centralizing persistence instead of duplicating storage writes
+- Preserving entity identity across persisted updates
+- Defensive parsing of stored data
+- Distinguishing valid JSON from valid application data
+- Test isolation for persistent browser state
+- Using `waitFor()` for effect-driven synchronization tests
+- Testing persistence across create, complete, edit, and delete flows
 - CSS comments that document design intent
 - Component testing
 - Mock functions

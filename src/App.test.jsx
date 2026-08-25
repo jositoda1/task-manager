@@ -1,10 +1,20 @@
 // src/App.test.jsx
-import { render, screen } from '@testing-library/react'
+import {
+    render,
+    screen,
+    waitFor,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import App from './App'
 
+
 describe('App', () => {
+    beforeEach(() => {
+        // I clear localStorage before every test so persisted data from one test
+        // cannot influence another test and make the suite order-dependent.
+        localStorage.clear()
+    })
     it('renders the application heading', () => {
         render(<App />)
 
@@ -215,5 +225,194 @@ describe('App', () => {
 
         expect(screen.getByText('Active task')).toBeInTheDocument()
         expect(screen.getByText('Completed task')).toBeInTheDocument()
+    })
+
+    it('loads previously saved tasks from localStorage', () => {
+        const storedTasks = [
+            {
+                id: 'task-1',
+                title: 'Persisted task',
+                completed: false,
+            },
+        ]
+
+        localStorage.setItem(
+            'task-manager-tasks',
+            JSON.stringify(storedTasks),
+        )
+
+        render(<App />)
+
+        // I verify persistence through visible application behavior instead of
+        // reading React state directly, keeping the test user-focused.
+        expect(screen.getByText('Persisted task')).toBeInTheDocument()
+        expect(screen.getByText(/1 task added/i)).toBeInTheDocument()
+    })
+
+
+    it('saves tasks to localStorage when the task collection changes', async () => {
+        const user = userEvent.setup()
+
+        render(<App />)
+
+        const taskInput = screen.getByRole('textbox', {
+            name: /task/i,
+        })
+
+        await user.type(taskInput, 'Persisted task')
+
+        await user.click(
+            screen.getByRole('button', {
+                name: /add task/i,
+            }),
+        )
+
+        // I read the stored data back through the browser API because this test
+        // verifies the synchronization boundary between React and localStorage.
+        await waitFor(() => {
+            const storedTasks = JSON.parse(
+                localStorage.getItem('task-manager-tasks'),
+            )
+
+            expect(storedTasks).toHaveLength(1)
+
+            expect(storedTasks[0]).toMatchObject({
+                title: 'Persisted task',
+                completed: false,
+            })
+        })
+    })
+
+    it('keeps localStorage synchronized when a task changes and is deleted', async () => {
+        const user = userEvent.setup()
+
+        render(<App />)
+
+        const taskInput = screen.getByRole('textbox', {
+            name: /task/i,
+        })
+
+        await user.type(taskInput, 'Persisted task')
+
+        await user.click(
+            screen.getByRole('button', {
+                name: /add task/i,
+            }),
+        )
+
+        let persistedTaskId
+
+        await waitFor(() => {
+            const storedTasks = JSON.parse(
+                localStorage.getItem('task-manager-tasks'),
+            )
+
+            expect(storedTasks).toHaveLength(1)
+
+            persistedTaskId = storedTasks[0].id
+        })
+
+        await user.click(
+            screen.getByRole('checkbox', {
+                name: /persisted task/i,
+            }),
+        )
+
+        // I verify that completion updates the same persisted task instead of
+        // creating a different stored record with a new identity.
+        await waitFor(() => {
+            const storedTasks = JSON.parse(
+                localStorage.getItem('task-manager-tasks'),
+            )
+
+            expect(storedTasks[0]).toMatchObject({
+                id: persistedTaskId,
+                title: 'Persisted task',
+                completed: true,
+            })
+        })
+
+        await user.click(
+            screen.getByRole('button', {
+                name: /^edit persisted task$/i,
+            }),
+        )
+
+        const editInput = screen.getByRole('textbox', {
+            name: /^edit persisted task$/i,
+        })
+
+        await user.clear(editInput)
+        await user.type(editInput, 'Updated persisted task')
+
+        await user.click(
+            screen.getByRole('button', {
+                name: /^save$/i,
+            }),
+        )
+
+        // I verify that editing changes only the persisted title while preserving
+        // the task identity and its existing completion state.
+        await waitFor(() => {
+            const storedTasks = JSON.parse(
+                localStorage.getItem('task-manager-tasks'),
+            )
+
+            expect(storedTasks[0]).toMatchObject({
+                id: persistedTaskId,
+                title: 'Updated persisted task',
+                completed: true,
+            })
+        })
+
+        await user.click(
+            screen.getByRole('button', {
+                name: /^delete updated persisted task$/i,
+            }),
+        )
+
+        // I verify deletion at the storage boundary because removed tasks should
+        // not reappear after the application is reloaded.
+        await waitFor(() => {
+            const storedTasks = JSON.parse(
+                localStorage.getItem('task-manager-tasks'),
+            )
+
+            expect(storedTasks).toEqual([])
+        })
+    })
+
+    it('recovers safely from invalid localStorage data', () => {
+        localStorage.setItem(
+            'task-manager-tasks',
+            '{invalid-json',
+        )
+
+        render(<App />)
+
+        // I verify recovery through the visible empty application state because
+        // corrupted persisted data should not prevent the interface from loading.
+        expect(screen.getByText(/0 tasks added/i)).toBeInTheDocument()
+        expect(
+            screen.getByText(/no tasks yet/i),
+        ).toBeInTheDocument()
+    })
+
+    it('ignores stored JSON that is not a task collection', () => {
+        localStorage.setItem(
+            'task-manager-tasks',
+            JSON.stringify({
+                unexpected: 'value',
+            }),
+        )
+
+        render(<App />)
+
+        // I validate the expected collection shape after parsing because syntactically
+        // valid JSON can still contain data that the application cannot use as tasks.
+        expect(screen.getByText(/0 tasks added/i)).toBeInTheDocument()
+        expect(
+            screen.getByText(/no tasks yet/i),
+        ).toBeInTheDocument()
     })
 })
