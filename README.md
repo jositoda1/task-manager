@@ -115,10 +115,31 @@ The project is currently under active development.
 - Production `dist` artifact publishing
 - Manual deployment support with `workflow_dispatch`
 - Public deployment verification with HTTP status checking
+- Structured client-side security and audit logging
+- Automatic redaction of sensitive log fields
+- Session-scoped, size-limited security log buffer
+- Logging for task actions and browser-storage integrity failures
 
 ### Planned
 
 - Further portfolio projects and backend-focused work
+
+## Security Logs
+
+The application records structured audit events in the current browser tab's
+`sessionStorage`, under `task-manager-security-logs`. The buffer keeps the most
+recent 100 entries and never intentionally records task titles, credentials,
+tokens, cookies, or other sensitive fields.
+
+Events cover task creation, editing, completion, deletion and bulk clearing, as
+well as malformed persisted data and browser-storage read/write failures. Logs
+are also written to the console during development.
+
+Because this is a client-only application, these logs are diagnostic rather
+than tamper-proof: a browser user can inspect or modify them. A future backend
+should receive sanitized events over HTTPS and enforce authentication,
+authorization, retention, and access controls before the logs are considered a
+security audit trail.
 
 ## Tech Stack
 
